@@ -177,6 +177,28 @@ table.t td{padding:7px 0;border-top:1px solid var(--line);text-align:right;font-
 .filters{display:flex;gap:8px;margin:4px 0 2px}
 .filters select{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px}
 
+.rseg{margin:2px 0 4px}.rseg button{font-size:13px;padding:8px 2px}
+.stat3{display:flex;gap:8px;margin-top:12px}.stat3 div{flex:1;background:var(--bg);border-radius:12px;padding:10px 6px;text-align:center}.stat3 b{display:block;font-size:20px}.stat3 span{font-size:12px;color:var(--mute)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.ch{text-align:center;font-size:11px;color:var(--mute)}
+.cd{aspect-ratio:1;border-radius:9px;display:grid;place-items:center;font-size:12px;font-variant-numeric:tabular-nums;background:transparent;border:1px solid var(--line);color:var(--mute)}
+.cd.x{border:0}
+.cd.l1{background:color-mix(in srgb,var(--acc) 20%,transparent);border-color:transparent;color:var(--ink)}
+.cd.l2{background:color-mix(in srgb,var(--acc) 45%,transparent);border-color:transparent;color:var(--ink)}
+.cd.l3{background:color-mix(in srgb,var(--acc) 72%,transparent);border-color:transparent;color:var(--bg)}
+.cd.l4{background:var(--acc);border-color:transparent;color:var(--bg);font-weight:700}
+.cd.fut{opacity:.35}.cd.now{outline:2px solid var(--ink);outline-offset:1px}
+.callegend{display:flex;align-items:center;gap:5px;justify-content:flex-end;font-size:11px;color:var(--mute);margin-top:8px}
+.callegend .cd{width:14px;height:14px;aspect-ratio:auto;border-radius:4px;display:inline-block}
+.wk{display:flex;align-items:flex-end;gap:8px;height:116px;margin:4px 0 10px}
+.wk div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%}
+.wk i{display:block;width:100%;max-width:28px;border-radius:4px 4px 0 0;background:var(--acc)}.wk i.we{opacity:.5}
+.wv,.wl{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums;min-height:14px}
+.line{display:block;width:100%;height:auto;margin:8px 0 2px}.line .ln{fill:none;stroke:var(--acc);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.line .ax{stroke:var(--line)}.line .pt{fill:var(--acc);stroke:var(--card);stroke-width:2}.line .lt{font-size:10px;fill:var(--mute)}
+.spark{width:84px;height:28px;flex:none}.spark path{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}.spark circle{fill:var(--c)}
+.trow{padding:7px 0}.trow+.trow{border-top:1px solid var(--line)}
+.bcrow{padding:10px 0}.bcrow+.bcrow{border-top:1px solid var(--line)}.bcgap{font-size:13px;margin-top:6px}
+[data-style="amoled"] .stat3 div{background:#0d0d0d}
 /* ---- shared by Slate and AMOLED: flat surfaces, sentence-case headings ---- */
 [data-style="slate"] .card,[data-style="amoled"] .card{border:1px solid var(--line);border-radius:12px;box-shadow:none}
 [data-style="slate"] .card h2,[data-style="amoled"] .card h2{text-transform:none;letter-spacing:0;font-size:14px;color:var(--ink);font-weight:650}
@@ -234,6 +256,7 @@ button{transition:transform .12s ease,background-color .15s ease,border-color .1
 @keyframes slideL{from{opacity:0;transform:translateX(18px)}}
 @keyframes slideR{from{opacity:0;transform:translateX(-18px)}}
 @keyframes grow{from{transform:scaleX(0)}}
+@keyframes growY{from{transform:scaleY(0)}}
 @keyframes sheetIn{from{transform:translateY(100%)}}
 @keyframes sheetOut{to{transform:translateY(100%)}}
 @keyframes dimIn{from{background:rgba(0,0,0,0)}}
@@ -244,6 +267,7 @@ button{transition:transform .12s ease,background-color .15s ease,border-color .1
 #app.a-next>*:not(header){animation:slideL .24s cubic-bezier(.2,.7,.2,1) both}
 #app.a-prev>*:not(header){animation:slideR .24s cubic-bezier(.2,.7,.2,1) both}
 #app[class^="a-"] .meter i,#app[class^="a-"] .bar i,#app[class^="a-"] .mbar i{transform-origin:left;animation:grow .6s cubic-bezier(.2,.7,.2,1) .08s both}
+#app[class^="a-"] .wk i{transform-origin:bottom;animation:growY .5s cubic-bezier(.2,.7,.2,1) .05s both}
 #app[class^="a-"] .donut{transform-origin:50% 50%;animation:ring .6s cubic-bezier(.2,.7,.2,1) both}
 .sheetwrap{animation:dimIn .22s ease both}
 .sheetwrap .sheet{animation:sheetIn .28s cubic-bezier(.2,.8,.2,1) both}
@@ -432,9 +456,9 @@ function renderEntries(){
 /* ---------- REPORTS ---------- */
 const normNote=n=>(n||'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 function catTotals(st){const m={};for(const e of st.exp){const k=e.cat||'';m[k]=m[k]||{s:0,p:0,n:0};if(e.payout)m[k].p+=e.amount;else m[k].s+=e.amount;m[k].n++}return m}
-function renderReports(){
+function rMonth(){
   const {cs,i,c}=curCycles(),st=cycStats(c),isCur=inCyc(c,today());
-  let h=head('Reports');
+  let h='';
   if(!st.es.length)return h+'<div class="empty">Nothing logged in '+esc(c.label)+' yet.</div>';
   const prior=cs.slice(Math.max(0,i-6),i).map(x=>({c:x,st:cycStats(x)})).filter(x=>x.st.es.length);
   const prev=prior.length?prior[prior.length-1]:null;
@@ -458,6 +482,8 @@ function renderReports(){
   h+=`<div class="card"><h2>What stands out</h2>${notes.slice(0,3).map(n=>`<div class="note ${n[0]}">${n[1]}</div>`).join('')||'<div class="sub">Nothing unusual so far.</div>'}</div>`;
   // salary
   h+=`<div class="card"><h2>Am I within my salary?</h2>${st.salary?`<button class="kv tap" data-act="rlist" data-k="salary"><span>Salary</span><b class="num">${fmt(st.salary)}</b></button><button class="kv tap" data-act="rlist" data-k="spent"><span>Spent from salary</span><b class="num">${fmt(st.spent)}</b></button><div class="kv"><span>${st.left<0?'Over by':'Left'}</span><b class="num ${st.left<0?'bad':'good'}">${fmt(Math.abs(st.left))}</b></div>${proj!=null?`<div class="kv"><span>Estimated at month end</span><b class="num ${proj>st.salary?'bad':''}">${fmt(proj)}</b></div>`:(isCur?'<div class="sub" style="padding-top:6px">A month-end estimate appears after a week of entries.</div>':'')}`:`<div class="sub">No salary logged for this month.</div><button class="kv tap" data-act="rlist" data-k="spent"><span>Spent so far</span><b class="num">${fmt(st.spent)}</b></button>`}</div>`;
+  h+=sameDayCard(cs,i,c,st,isCur);
+  h+=fixedFlexCard(st);
   // payout pot (all time)
   let potIn=0,potOut=0;for(const e of S.entries){if(e.type==='income'&&!isSalary(e))potIn+=e.amount;if(e.type==='expense'&&e.payout)potOut+=e.amount}
   if(potIn||potOut)h+=`<div class="card"><h2>Payout and other income</h2><button class="kv tap" data-act="rlist" data-k="potin"><span>Received so far</span><b class="num">${fmt(potIn)}</b></button><button class="kv tap" data-act="rlist" data-k="potout"><span>Spent from it</span><b class="num pay">${fmt(potOut)}</b></button><div class="kv"><span>${potIn-potOut<0?'Overspent by':'Remaining'}</span><b class="num ${potIn-potOut<0?'bad':''}">${fmt(Math.abs(potIn-potOut))}</b></div><div class="sub" style="padding-top:6px">All months together. This month: received ${fmt(st.extra)}, spent ${fmt(st.payout)}.</div></div>`;
@@ -472,22 +498,175 @@ function renderReports(){
   const max=rows.length?rows[0].t:1;
   h+=`<div class="card"><h2>Where did it go?</h2><div class="donutwrap"><svg class="donut" data-act="donut" viewBox="0 0 200 200" role="img" aria-label="Spending by category">${arcs}<text x="100" y="96" font-size="11" style="fill:var(--mute)">Spent in ${esc(c.label)}</text><text x="100" y="118" font-size="19" font-weight="750">${fmt(st.total)}</text></svg></div>${st.payout?'<div class="legend" style="justify-content:center"><span><i></i>From salary</span><span><i class="p"></i>From payout</span></div>':''}${rows.map(r=>{const l=catLook(cat(r.k));let d='';if(prevCt){const pv=prevCt[r.k]?prevCt[r.k].s+prevCt[r.k].p:0;const df=r.t-pv;d=`<div class="delta">${pv?(df>=0?'▲ ':'▼ ')+fmt(Math.abs(df))+' vs '+esc(prev.c.label):'new this month'}${avg[r.k]&&prior.length>1?' · usual '+fmt(avg[r.k]):''}</div>`}
     return `<button class="catrow" data-act="catview" data-id="${r.k}"><div class="row">${catDot(r.k,true)}<span class="grow" style="flex:1;min-width:0"><div class="row" style="gap:6px"><span class="grow" style="flex:1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(catName(r.k))} <span class="sub">· ${r.n}</span></span><b class="num">${fmt(r.t)}</b><span class="sub num" style="width:34px;text-align:right">${Math.round(r.t/st.total*100)}%</span></div><div class="bar" style="--c:var(--s${l.col})"><i style="width:${r.s/max*100}%"></i>${r.p?`<i class="p" style="width:${r.p/max*100}%"></i>`:''}</div>${d}</span></div></button>`}).join('')}</div>`;
-  // repeats
-  h+=`<div class="card"><h2>What adds up?</h2>${reps.length?`<table class="t"><tr><th>Note</th><th>Times</th><th>Total</th></tr>${reps.slice(0,8).map(r=>`<tr data-act="rlist" data-k="note" data-id="${esc(normNote(r.label))}"><td>${esc(r.label)} ›</td><td>${r.n}</td><td>${fmt(r.s)}</td></tr>`).join('')}</table>`:'<div class="sub">No repeated notes this month. Entries with the same note are grouped here.</div>'}</div>`;
-  // monthly payments: same note seen in 2+ months
-  const seen={};cs.forEach(x=>{const m={};for(const e of S.entries)if(e.type==='expense'&&inCyc(x,e.date)){const k=normNote(e.note);if(k)m[k]=(m[k]||0)+e.amount}for(const k in m){seen[k]=seen[k]||[];seen[k].push(m[k])}});
-  const monthly=Object.entries(seen).filter(([k,v])=>v.length>=2&&g[k]).map(([k,v])=>({label:g[k].label,now:g[k].s,avg:v.reduce((a,b)=>a+b,0)/v.length})).sort((a,b)=>b.now-a.now);
-  h+=`<div class="card"><h2>What do I pay every month?</h2>${monthly.length?`<table class="t"><tr><th>Payment</th><th>This month</th><th>Usual</th></tr>${monthly.slice(0,12).map(r=>`<tr data-act="rlist" data-k="note" data-id="${esc(normNote(r.label))}"><td>${esc(r.label)} ›</td><td>${fmt(r.now)}</td><td>${fmt(r.avg)}</td></tr>`).join('')}<tr><td><b>Total</b></td><td><b>${fmt(monthly.reduce((s,r)=>s+r.now,0))}</b></td><td></td></tr></table>`:'<div class="sub">This fills in once the same note appears in two different months, for example a subscription.</div>'}</div>`;
   // accounts
   const b=balances();
-  h+=`<div class="card"><h2>How is each account doing?</h2><table class="t"><tr><th>Account</th><th>In</th><th>Spent</th><th>Now</th></tr>${S.accounts.filter(a=>!a.closed||st.es.some(e=>e.acc===a.id||e.toAcc===a.id)).map(a=>{let inn=0,sp=0;for(const e of st.es){if(e.type==='income'&&e.acc===a.id)inn+=e.amount;if(e.type==='transfer'&&e.toAcc===a.id)inn+=e.amount;if(e.type==='expense'&&e.acc===a.id)sp+=e.amount}return `<tr data-act="acctview" data-id="${a.id}"><td>${esc(a.name)} ›</td><td>${fnum(inn)}</td><td>${fnum(sp)}</td><td>${fnum(b[a.id]||0)}</td></tr>`}).join('')}</table><div class="sub" style="padding-top:6px">“In” counts income and transfers received this month.</div></div>`;
-  // months
-  const all=cs.map(x=>({c:x,st:cycStats(x)})).filter(x=>x.st.es.length).slice(-8);
-  const mx=Math.max(1,...all.map(x=>Math.max(x.st.spent,x.st.salary)));
-  h+=`<div class="card"><h2>How do the months compare?</h2>${all.length>1?'':'<div class="sub" style="margin-bottom:6px">More months appear here as you log them.</div>'}${all.map(x=>{const o=x.st.salary&&x.st.spent>x.st.salary;return `<div class="mrow" data-act="gocyc" data-id="${x.c.key}"><div class="row"><b class="grow">${esc(x.c.label)}${x.c.key===c.key?'':' ›'}</b><span class="num ${o?'bad':''}">${fmt(x.st.spent)}</span></div><div class="mbar"><i class="${o?'o':''}" style="width:${x.st.spent/mx*100}%"></i>${x.st.salary?`<u style="left:${x.st.salary/mx*100}%"></u>`:''}</div><div class="delta">${x.st.salary?(o?'Over salary by '+fmt(x.st.spent-x.st.salary):'Under salary by '+fmt(x.st.salary-x.st.spent)):'No salary logged'}${x.st.payout?' · payout spending '+fmt(x.st.payout):''}</div></div>`}).join('')}<div class="sub" style="padding-top:6px">The bar is spending from salary. The line marks the salary.</div></div>`;
+  h+=`<div class="card"><h2>How is each account doing?</h2><table class="t"><tr><th>Account</th><th>In</th><th>Spent</th><th>Now</th></tr>${S.accounts.filter(a=>!a.closed||st.es.some(e=>e.acc===a.id||e.toAcc===a.id)).map(a=>{let inn=0,sp=0;for(const e of st.es){if(e.type==='income'&&e.acc===a.id)inn+=e.amount;if(e.type==='transfer'&&e.toAcc===a.id)inn+=e.amount;if(e.type==='expense'&&e.acc===a.id)sp+=e.amount}return `<tr data-act="acctview" data-id="${a.id}"><td>${esc(a.name)} ›</td><td>${fnum(inn)}</td><td>${fnum(sp)}</td><td>${fnum(b[a.id]||0)}</td></tr>`}).join('')}</table><div class="sub" style="padding-top:6px">“In” counts income and transfers received this month.</div>${runwayLines(c,st,b)}</div>`;
   // biggest
   h+=`<div class="card"><h2>Biggest expenses</h2>${st.exp.slice().sort((a,b)=>b.amount-a.amount).slice(0,5).map(e=>entryRow(e,true)).join('')}</div>`;
   return h}
+
+/* ---------- REPORTS: shared helpers ---------- */
+const isFixed=c=>!!c&&(c.fixed!==undefined?!!c.fixed:/committee|bill|utilit|loan|rent|install|subscription|insurance|fee/i.test(c.name));
+const isFlex=e=>e.type==='expense'&&!e.payout&&!isFixed(cat(e.cat));
+const smallAt=()=>+S.settings.smallAt>0?+S.settings.smallAt:2000;
+const fk=n=>{const a=Math.abs(n);return a>=1e6?(n/1e6).toFixed(a>=1e7?0:1)+'M':a>=1000?Math.round(n/1000)+'k':String(Math.round(n))};
+const sum=(a,f)=>a.reduce((s,x)=>s+(f?f(x):x),0);
+const shortDate=s=>{const d=pd(s);return d.getDate()+' '+MON[d.getMonth()]};
+const keyLabel=k=>{const [y,m]=k.split('-').map(Number);return MON[m-1]+' '+y};
+const keyDiff=(a,b)=>{const [ya,ma]=a.split('-').map(Number),[yb,mb]=b.split('-').map(Number);return (ya-yb)*12+(ma-mb)};
+const keyAdd=(k,n)=>{let [y,m]=k.split('-').map(Number);m+=n;y+=Math.floor((m-1)/12);m=((m-1)%12+12)%12+1;return y+'-'+pad(m)};
+function cycDays(c){const end=c.end||addDays(today(),1);const out=[];for(let d=c.start;d<end&&d<=today();d=addDays(d,1))out.push(d);return out}
+function elapsedOf(c){const isCur=inCyc(c,today());return Math.max(1,daysBetween(c.start,isCur?today():(c.end||today()))+(isCur?1:0))}
+function noteGroups(es){const g={};for(const e of es){const k=normNote(e.note);if(!k)continue;g[k]=g[k]||{k,n:0,s:0,label:e.note.trim(),last:e};g[k].n++;g[k].s+=e.amount}return g}
+const needMore=t=>`<div class="sub">${t}</div>`;
+const stat3=a=>`<div class="stat3">${a.map(x=>`<div><b class="num">${x[0]}</b><span>${x[1]}</span></div>`).join('')}</div>`;
+
+function renderReports(){
+  const tabs=[['month','This month'],['patterns','Patterns'],['long','Long view'],['tools','Tools']];
+  const t=V.rtab||'month';
+  let h=head('Reports',t!=='tools');
+  h+=`<div class="seg rseg">${tabs.map(([k,l])=>`<button data-act="rtab" data-id="${k}" class="${t===k?'on':''}">${l}</button>`).join('')}</div>`;
+  return h+({month:rMonth,patterns:rPatterns,long:rLong,tools:rTools})[t]()}
+
+/* ---------- This month: extra cards ---------- */
+function sameDayCard(cs,i,c,st,isCur){
+  const prev=i>0?cs[i-1]:null;const pst=prev?cycStats(prev):null;
+  if(!prev||!pst.es.length)return `<div class="card"><h2>Same point last month</h2>${needMore('This compares your spending so far with the same day of the previous month. It appears once you have a previous month.')}</div>`;
+  const idx=elapsedOf(c)-1;const upto=addDays(prev.start,idx);
+  const then=sum(pst.exp.filter(e=>!e.payout&&e.date<=upto),e=>e.amount);const now=st.spent;const mx=Math.max(now,then,1);const d=now-then;
+  return `<div class="card"><h2>Same point last month</h2><div class="sub" style="margin-bottom:6px">${isCur?'Spending from salary by day '+(idx+1)+' of the month':'Spending from salary over the whole month'}</div>
+  <div class="mrow"><div class="row"><b class="grow">${esc(c.label)}</b><span class="num">${fmt(now)}</span></div><div class="mbar"><i style="width:${now/mx*100}%"></i></div></div>
+  <div class="mrow"><div class="row"><span class="grow">${esc(prev.label)}</span><span class="num">${fmt(then)}</span></div><div class="mbar"><i style="width:${then/mx*100}%;opacity:.45"></i></div></div>
+  <div class="sub" style="padding-top:8px">${d===0?'Exactly level.':`You are <b class="${d>0?'bad':'good'}">${fmt(Math.abs(d))} ${d>0?'ahead of':'behind'}</b> last month’s spending at this point.`}</div></div>`}
+function fixedFlexCard(st){
+  const own=st.exp.filter(e=>!e.payout);const fx=sum(own.filter(e=>isFixed(cat(e.cat))),e=>e.amount),fl=sum(own.filter(e=>!isFixed(cat(e.cat))),e=>e.amount);
+  const free=st.salary-fx;
+  return `<div class="card"><h2>Fixed and flexible</h2>${st.salary?`<div class="kv"><span>Salary</span><b class="num">${fmt(st.salary)}</b></div>`:''}<button class="kv tap" data-act="rlist" data-k="fixed"><span>Fixed costs</span><b class="num">${fmt(fx)}</b></button>${st.salary?`<div class="kv"><span>Yours to control</span><b class="num">${fmt(free)}</b></div>`:''}<button class="kv tap" data-act="rlist" data-k="flex"><span>Flexible spending</span><b class="num">${fmt(fl)}</b></button>${st.salary?`<div class="kv"><span>${free-fl<0?'Over by':'Left of it'}</span><b class="num ${free-fl<0?'bad':'good'}">${fmt(Math.abs(free-fl))}</b></div><div class="meter ${fl>free?'over':''}"><i style="width:${free>0?Math.min(100,fl/free*100):100}%"></i></div>`:''}<div class="sub">Fixed costs are bills, committee and loans. Change which categories count as fixed in Settings, under each category. Payout spending is left out.</div></div>`}
+function runwayLines(c,st,b){
+  if(!inCyc(c,today()))return '';const el=elapsedOf(c);const out=[];
+  for(const a of S.accounts){if(a.closed)continue;const sp=sum(st.es.filter(e=>e.type==='expense'&&e.acc===a.id&&!e.payout),e=>e.amount);const bal=b[a.id]||0;if(sp<=0||bal<=0)continue;const days=bal/(sp/el);
+    out.push(`<div class="kv"><span>${esc(a.name)}</span><b class="num">${days>120?'4+ months':'about '+Math.round(days)+' day'+(Math.round(days)===1?'':'s')+', to '+shortDate(addDays(today(),Math.round(days)))}</b></div>`)}
+  return out.length?`<div class="lbl" style="margin-top:14px">How long each balance lasts at this month’s pace</div>${out.join('')}<div class="sub" style="padding-top:6px">Payout spending is left out of the pace.</div>`:''}
+
+/* ---------- Patterns ---------- */
+function rPatterns(){
+  const {cs,i,c}=curCycles(),st=cycStats(c),isCur=inCyc(c,today());
+  if(!st.es.length)return '<div class="empty">Nothing logged in '+esc(c.label)+' yet.</div>';
+  let h='';const own=st.exp.filter(e=>!e.payout);
+  // calendar heat map
+  const byDay={},flexDay={};for(const e of own){byDay[e.date]=(byDay[e.date]||0)+e.amount;if(isFlex(e))flexDay[e.date]=(flexDay[e.date]||0)+e.amount}
+  const vals=Object.values(byDay).sort((a,b)=>a-b);const cap=vals.length?vals[Math.min(vals.length-1,Math.floor(vals.length*0.9))]:1;
+  const first=c.start,last=addDays(expectedEnd(c),-1);const lead=(pd(first).getDay()+6)%7;let cells='';
+  for(let k=0;k<lead;k++)cells+='<span class="cd x"></span>';
+  for(let d=first;d<=last;d=addDays(d,1)){const v=byDay[d]||0;const fut=d>today();const lvl=v?Math.min(4,1+Math.floor(Math.min(v,cap)/cap*3.999)):0;
+    cells+=`<button class="cd l${lvl} ${fut?'fut':''} ${d===today()?'now':''}" ${fut?'disabled':`data-act="rlist" data-k="day" data-id="${d}"`} aria-label="${shortDate(d)}: ${fmt(v)}">${pd(d).getDate()}</button>`}
+  const days=cycDays(c);let longest=0,run=0,zero=0;for(const d of days){if(!flexDay[d]){zero++;run++;if(run>longest)longest=run}else run=0}
+  const busiest=Object.entries(byDay).sort((a,b)=>b[1]-a[1])[0];
+  h+=`<div class="card"><h2>Day by day</h2><div class="cal"><span class="ch">M</span><span class="ch">T</span><span class="ch">W</span><span class="ch">T</span><span class="ch">F</span><span class="ch">S</span><span class="ch">S</span>${cells}</div><div class="callegend"><span>Less</span><i class="cd l1"></i><i class="cd l2"></i><i class="cd l3"></i><i class="cd l4"></i><span>More</span></div>${stat3([[zero,'no-spend days'],[longest,'longest streak'],[isCur?run:'–','current streak']])}<div class="sub" style="padding-top:8px">Darker days cost more. Tap a day to see it. ${busiest?'The heaviest was '+shortDate(busiest[0])+' at '+fmt(busiest[1])+'. ':''}A no-spend day has no flexible spending; bills do not break a streak.</div></div>`;
+  // when you spend (all history)
+  const allFlex=S.entries.filter(isFlex);const firstDate=S.entries.length?S.entries.map(e=>e.date).sort()[0]:today();
+  const dcount=[0,0,0,0,0,0,0],dsum=[0,0,0,0,0,0,0];for(let d=firstDate;d<=today();d=addDays(d,1))dcount[(pd(d).getDay()+6)%7]++;
+  for(const e of allFlex)if(e.date<=today())dsum[(pd(e.date).getDay()+6)%7]+=e.amount;
+  const davg=dsum.map((s,k)=>dcount[k]?s/dcount[k]:0);const dmax=Math.max(1,...davg);const top=davg.indexOf(Math.max(...davg));
+  const wd=sum(dsum.slice(0,5))/Math.max(1,sum(dcount.slice(0,5))),we=sum(dsum.slice(5))/Math.max(1,sum(dcount.slice(5)));
+  const fl=own.filter(isFlex);const w1end=addDays(c.start,7);const el=elapsedOf(c);
+  const w1=sum(fl.filter(e=>e.date<w1end),e=>e.amount)/Math.min(7,el);const later=el>7?sum(fl.filter(e=>e.date>=w1end),e=>e.amount)/(el-7):null;
+  h+=`<div class="card"><h2>When you spend</h2><div class="wk">${davg.map((v,k)=>`<div><span class="wv">${k===top&&v?fk(v):''}</span><i style="height:${Math.max(2,v/dmax*72)}px" class="${k>4?'we':''}"></i><span class="wl">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][k]}</span></div>`).join('')}</div><div class="kv"><span>Average weekday</span><b class="num">${fmt(wd)}</b></div><div class="kv"><span>Average weekend day</span><b class="num">${fmt(we)}</b></div><div class="kv"><span>First week after payday, per day</span><b class="num">${fmt(w1)}</b></div>${later!=null?`<div class="kv"><span>Rest of ${esc(c.label)}, per day</span><b class="num">${fmt(later)}</b></div>`:''}<div class="sub" style="padding-top:6px">Flexible spending only. The bars and weekday averages use every month you have logged.</div></div>`;
+  // small spends
+  const sm=own.filter(e=>e.amount<smallAt());const smT=sum(sm,e=>e.amount);
+  h+=`<div class="card"><h2>Small spends</h2><button class="kv tap" data-act="rlist" data-k="small"><span>Entries under ${fmt(smallAt())}</span><b class="num">${sm.length}</b></button><div class="kv"><span>They add up to</span><b class="num">${fmt(smT)}</b></div><div class="kv"><span>Share of spending from salary</span><b class="num">${st.spent?Math.round(smT/st.spent*100):0}%</b></div><div class="sub" style="padding-top:6px">Change the amount in Settings, under Small spends.</div></div>`;
+  // places leaderboard
+  const g=Object.values(noteGroups(st.exp)).sort((a,b)=>b.s-a.s).slice(0,10);
+  h+=`<div class="card"><h2>Where you spend most</h2>${g.length?`<table class="t"><tr><th>Note</th><th>Visits</th><th>Each</th><th>Total</th></tr>${g.map(r=>`<tr data-act="rlist" data-k="note" data-id="${esc(r.k)}"><td>${esc(r.label)} ›</td><td>${r.n}</td><td>${fnum(r.s/r.n)}</td><td>${fnum(r.s)}</td></tr>`).join('')}</table><div class="sub" style="padding-top:6px">Grouped by the note on each entry, so the same note spelt the same way counts as one place.</div>`:needMore('Add a note to entries and they are ranked here.')}</div>`;
+  // likely monthly payments, per year
+  const perC=cs.map(x=>noteGroups(S.entries.filter(e=>e.type==='expense'&&!e.payout&&inCyc(x,e.date))));const withData=perC.filter(m=>Object.keys(m).length).length;
+  const cur=perC[i],prv=i>0?perC[i-1]:{};let subs=[];
+  for(const k in cur){const seenIn=perC.filter(m=>m[k]).length;const c0=cat(cur[k].last.cat);const billy=c0&&/bill|utilit|subscription/i.test(c0.name);
+    if(seenIn>=2||(withData<2&&billy))subs.push({k,label:cur[k].label,now:cur[k].s,was:prv[k]?prv[k].s:null})}
+  subs.sort((a,b)=>b.now-a.now);
+  h+=`<div class="card"><h2>Monthly payments, per year</h2>${subs.length?`<table class="t"><tr><th>Payment</th><th>Month</th><th>Year</th></tr>${subs.slice(0,14).map(r=>{const ch=r.was&&Math.abs(r.now-r.was)/r.was>0.05;return `<tr data-act="rlist" data-k="note" data-id="${esc(r.k)}"><td>${esc(r.label)} ›${ch?` <span class="tag">${r.now>r.was?'up':'down'} ${fmt(Math.abs(r.now-r.was))}</span>`:''}</td><td>${fnum(r.now)}</td><td>${fnum(r.now*12)}</td></tr>`}).join('')}<tr><td><b>Total</b></td><td><b>${fnum(sum(subs,r=>r.now))}</b></td><td><b>${fnum(sum(subs,r=>r.now)*12)}</b></td></tr></table><div class="sub" style="padding-top:6px">${withData<2?'With one month logged, this lists noted entries in your bills category. From the second month it uses payments that repeat.':'Payments whose note appears in two or more months. A tag marks a price change from last month.'}</div>`:needMore('Payments that repeat month to month are listed here with their yearly cost.')}</div>`;
+  // unusual entries
+  const hist={};for(const e of S.entries)if(e.type==='expense'&&e.date<c.start){(hist[e.cat]=hist[e.cat]||[]).push(e.amount)}
+  const odd=[];for(const e of st.exp){const a=hist[e.cat];if(!a||a.length<5)continue;const s=a.slice().sort((x,y)=>x-y);const med=s[Math.floor(s.length/2)];if(e.amount>med*2.5&&e.amount>med+2000)odd.push({e,med})}
+  odd.sort((a,b)=>b.e.amount/b.med-a.e.amount/a.med);
+  h+=`<div class="card"><h2>Unusual entries</h2>${odd.length?odd.slice(0,6).map(o=>entryRow(o.e,true)+`<div class="delta" style="margin:-4px 0 6px 48px">${(o.e.amount/o.med).toFixed(1)} times your usual ${esc(catName(o.e.cat))} entry of ${fmt(o.med)}</div>`).join(''):needMore(Object.values(hist).some(a=>a.length>=5)?'Nothing out of the ordinary this month.':'This flags entries far above your normal for their category. It needs at least five earlier entries in a category to know what normal is.')}</div>`;
+  return h}
+
+/* ---------- Long view ---------- */
+function lineChart(pts){ // pts: [{d,v}]
+  const W=320,H=132,L=6,Rr=6,T=18,B=30;const vs=pts.map(p=>p.v);let lo=Math.min(...vs),hi=Math.max(...vs);if(hi===lo){hi+=1;lo-=1}
+  const X=k=>L+(pts.length>1?k/(pts.length-1):0.5)*(W-L-Rr),Y=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);
+  const path=pts.map((p,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(p.v).toFixed(1)).join('');const lastP=pts[pts.length-1];
+  const hiK=vs.indexOf(Math.max(...vs)),loK=vs.indexOf(Math.min(...vs));
+  return `<svg class="line" viewBox="0 0 ${W} ${H}" role="img" aria-label="Total balance over time"><line x1="${L}" x2="${W-Rr}" y1="${H-B}" y2="${H-B}" class="ax"/><path d="${path}" class="ln"/><circle cx="${X(pts.length-1)}" cy="${Y(lastP.v)}" r="4" class="pt"/><text x="${L}" y="${H-4}" class="lt">${shortDate(pts[0].d)}</text><text x="${W-Rr}" y="${H-4}" class="lt" text-anchor="end">${shortDate(lastP.d)}</text><text x="${Math.min(W-34,Math.max(34,X(hiK)))}" y="${Y(vs[hiK])-7}" class="lt" text-anchor="middle">high ${fk(vs[hiK])}</text>${hiK!==loK?`<text x="${Math.min(W-34,Math.max(34,X(loK)))}" y="${Y(vs[loK])+13}" class="lt" text-anchor="middle">low ${fk(vs[loK])}</text>`:''}</svg>`}
+function spark(vals,col){const W=72,H=24;const hi=Math.max(...vals,1),lo=Math.min(...vals,0);const X=k=>2+k/(vals.length-1)*(W-4),Y=v=>H-3-(v-lo)/(hi-lo||1)*(H-6);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" style="--c:var(--s${col})"><path d="${vals.map((v,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(v).toFixed(1)).join('')}"/><circle cx="${X(vals.length-1)}" cy="${Y(vals[vals.length-1])}" r="2.5"/></svg>`}
+function wrapStats(es,label){
+  const exp=es.filter(e=>e.type==='expense'),own=exp.filter(e=>!e.payout);if(!exp.length)return needMore('Nothing logged in '+esc(label)+'.');
+  const sal=sum(es.filter(isSalary),e=>e.amount),sp=sum(own,e=>e.amount);
+  const ct={};for(const e of exp)ct[e.cat]=(ct[e.cat]||0)+e.amount;const topC=Object.entries(ct).sort((a,b)=>b[1]-a[1])[0];
+  const big=exp.slice().sort((a,b)=>b.amount-a.amount)[0];const pl=Object.values(noteGroups(exp)).sort((a,b)=>b.n-a.n||b.s-a.s)[0];
+  const bd={};for(const e of own)bd[e.date]=(bd[e.date]||0)+e.amount;const busy=Object.entries(bd).sort((a,b)=>b[1]-a[1])[0];
+  const row=(l,v)=>`<div class="kv"><span>${l}</span><b class="num" style="text-align:right">${v}</b></div>`;
+  return row('Entries logged',es.length)+(sal?row('Salary',fmt(sal)):'')+row('Spent from salary',fmt(sp))+(sal?row(sal-sp<0?'Overspent':'Kept',fmt(Math.abs(sal-sp))+' ('+Math.round(Math.abs(sal-sp)/sal*100)+'%)'):'')+(sum(exp,e=>e.amount)-sp?row('Spent from payout',fmt(sum(exp,e=>e.amount)-sp)):'')+row('Top category',esc(catName(topC[0]))+', '+fmt(topC[1]))+row('Biggest expense',esc(big.note||catName(big.cat))+', '+fmt(big.amount))+(pl&&pl.n>1?row('Most visited',esc(pl.label)+', '+pl.n+' times'):'')+(busy?row('Heaviest day',shortDate(busy[0])+', '+fmt(busy[1])):'')}
+function rLong(){
+  const {cs,i,c}=curCycles();if(!S.entries.length)return '<div class="empty">Nothing logged yet.</div>';
+  let h='';
+  // total balance over time
+  const dates=S.entries.map(e=>e.date).sort();const d0=dates[0];const open=sum(S.accounts,a=>+a.opening||0);const net={};
+  for(const e of S.entries){if(e.type==='income')net[e.date]=(net[e.date]||0)+e.amount;else if(e.type==='expense')net[e.date]=(net[e.date]||0)-e.amount}
+  let pts=[],run=open;for(let d=d0;d<=today();d=addDays(d,1)){run+=net[d]||0;pts.push({d,v:run})}
+  if(pts.length>150){const step=Math.ceil(pts.length/120);pts=pts.filter((p,k)=>k%step===0||k===pts.length-1)}
+  const ch=pts.length>1?pts[pts.length-1].v-pts[0].v:0;
+  h+=`<div class="card"><h2>What you have, over time</h2><div class="row"><div class="big num grow" style="font-size:24px">${fmt(pts[pts.length-1].v)}</div>${pts.length>1?`<span class="sub num">${ch>=0?'up':'down'} ${fmt(Math.abs(ch))} since ${shortDate(d0)}</span>`:''}</div>${pts.length>1?lineChart(pts):needMore('A line appears after a second day of entries.')}<div class="sub">All accounts together, at the end of each day.</div></div>`;
+  // months compare
+  const all=cs.map(x=>({c:x,st:cycStats(x)})).filter(x=>x.st.es.length);const shown=all.slice(-8);
+  const mx=Math.max(1,...shown.map(x=>Math.max(x.st.spent,x.st.salary)));
+  h+=`<div class="card"><h2>How do the months compare?</h2>${shown.length>1?'':needMore('More months appear here as you log them.')}${shown.map(x=>{const o=x.st.salary&&x.st.spent>x.st.salary;return `<div class="mrow" data-act="gocyc" data-id="${x.c.key}"><div class="row"><b class="grow">${esc(x.c.label)}${x.c.key===c.key?'':' ›'}</b><span class="num ${o?'bad':''}">${fmt(x.st.spent)}</span></div><div class="mbar"><i class="${o?'o':''}" style="width:${x.st.spent/mx*100}%"></i>${x.st.salary?`<u style="left:${x.st.salary/mx*100}%"></u>`:''}</div><div class="delta">${x.st.salary?(o?'Over salary by '+fmt(x.st.spent-x.st.salary):'Under salary by '+fmt(x.st.salary-x.st.spent)):'No salary logged'}${x.st.payout?' · payout spending '+fmt(x.st.payout):''}</div></div>`}).join('')}<div class="sub" style="padding-top:6px">The bar is spending from salary. The line marks the salary.</div></div>`;
+  // savings rate
+  const sr=shown.filter(x=>x.st.salary).map(x=>({l:x.c.label,cur:inCyc(x.c,today()),r:(x.st.salary-x.st.spent)/x.st.salary,k:x.st.salary-x.st.spent}));
+  const done=sr.filter(x=>!x.cur);
+  h+=`<div class="card"><h2>How much of each salary you kept</h2>${sr.length?sr.map(x=>`<div class="mrow"><div class="row"><span class="grow">${esc(x.l)}${x.cur?' <span class="sub">so far</span>':''}</span><b class="num ${x.r<0?'bad':''}">${Math.round(x.r*100)}%</b><span class="sub num" style="width:92px;text-align:right">${x.k<0?'−':''}${fmt(Math.abs(x.k))}</span></div><div class="mbar"><i class="${x.r<0?'o':''}" style="width:${Math.min(100,Math.abs(x.r)*100)}%"></i></div></div>`).join('')+(done.length>1?`<div class="sub" style="padding-top:6px">Average over ${done.length} finished months: ${Math.round(sum(done,x=>x.r)/done.length*100)}%.</div>`:'<div class="sub" style="padding-top:6px">The current month drops as you keep spending. Payout money is not counted either way.</div>'):needMore('Log a salary and this shows the share of it you kept each month.')}</div>`;
+  // category trends
+  const lastN=all.slice(-6);
+  if(lastN.length<2)h+=`<div class="card"><h2>Category trends</h2>${needMore('A small trend line per category appears once you have two months logged.')}</div>`;
+  else{const tot={};const per=lastN.map(x=>{const m={};for(const e of x.st.exp){m[e.cat]=(m[e.cat]||0)+e.amount;tot[e.cat]=(tot[e.cat]||0)+e.amount}return m});
+    const topK=Object.entries(tot).sort((a,b)=>b[1]-a[1]).slice(0,8).map(x=>x[0]);
+    h+=`<div class="card"><h2>Category trends</h2><div class="sub" style="margin-bottom:4px">${esc(lastN[0].c.label)} to ${esc(lastN[lastN.length-1].c.label)}</div>${topK.map(k=>{const v=per.map(m=>m[k]||0);const a=v[0],z=v[v.length-1];const l=catLook(cat(k));return `<div class="trow"><div class="row">${catDot(k,true)}<span class="grow" style="flex:1;min-width:0"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(catName(k))}</div><div class="sub num">${fmt(z)} · ${a?(z>=a?'up ':'down ')+Math.round(Math.abs(z-a)/a*100)+'%':'new'}</div></span>${spark(v,l.col)}</div></div>`}).join('')}<div class="sub" style="padding-top:6px">The figure is the latest month. The percentage compares it with the first month shown.</div></div>`}
+  // wrap-up
+  const w=V.wrap||'month';const yr=c.key.slice(0,4);
+  const es=w==='month'?S.entries.filter(e=>inCyc(c,e.date)):S.entries.filter(e=>{const x=cs.find(y=>inCyc(y,e.date));return x&&x.key.slice(0,4)===yr});
+  h+=`<div class="card"><h2>Wrap-up</h2><div class="seg" style="margin-bottom:8px"><button data-act="wrap" data-id="month" class="${w==='month'?'on':''}">${esc(c.label)}</button><button data-act="wrap" data-id="year" class="${w==='year'?'on':''}">${yr}</button></div>${wrapStats(es,w==='month'?c.label:yr)}</div>`;
+  return h}
+
+/* ---------- Tools ---------- */
+function committeeCard(){
+  const m=S.committee;
+  if(!m||!m.months||!m.start||!m.share)return `<div class="card"><h2>Committee</h2><div class="sub">Track a committee from first instalment to last: what you have paid in, what is left, and when it ends.</div><button class="btn" data-act="cmset">Set up committee</button></div>`;
+  const cs=cycles();const nowC=cs.find(x=>inCyc(x,today()))||cs[cs.length-1];const nowKey=nowC.key;
+  const paid=Math.max(0,Math.min(m.months,keyDiff(nowKey,m.start)+1));const left=m.months-paid;const put=paid*m.share,all=m.months*m.share;const endKey=keyAdd(m.start,m.months-1);
+  const got=m.payout&&m.payoutMonth&&m.payoutMonth<=nowKey;const cc=S.categories.find(x=>/committee/i.test(x.name)&&x.type==='expense');const logged=cc?S.entries.filter(e=>e.cat===cc.id):[];
+  return `<div class="card"><h2>Committee</h2><div class="row"><div class="big num grow" style="font-size:24px">${paid} of ${m.months}</div><span class="sub">instalments paid</span></div><div class="meter"><i style="width:${paid/m.months*100}%"></i></div>
+  <div class="kv"><span>Paid in so far</span><b class="num">${fmt(put)}</b></div><div class="kv"><span>Still to pay</span><b class="num">${fmt(all-put)}</b></div><div class="kv"><span>Instalments left</span><b class="num">${left}</b></div><div class="kv"><span>${left?'Ends':'Ended'}</span><b class="num">${keyLabel(endKey)}</b></div>
+  ${m.payout?`<div class="kv"><span>Payout${m.payoutMonth?', '+keyLabel(m.payoutMonth):''}</span><b class="num pay">${fmt(m.payout)}${got?'':' due'}</b></div>`:''}
+  ${got?`<div class="note p" style="margin-top:8px">You have received <b>${fmt(Math.abs(m.payout-put))}</b> ${m.payout-put>=0?'more than':'less than'} you have paid in so far${left?', with '+fmt(all-put)+' still to pay over '+left+' month'+(left>1?'s':''):''}.</div>`:''}
+  <div class="sub" style="padding-top:6px">Assumes one instalment of ${fmt(m.share)} a month from ${keyLabel(m.start)}, each paid on time.${m.friend?' The '+fmt(m.friend)+' a month you pass on for someone else is not counted.':''}${logged.length?' Logged under '+esc(cc.name)+': '+logged.length+' entr'+(logged.length>1?'ies':'y')+', '+fmt(sum(logged,e=>e.amount))+'.':''}</div><button class="btn ghost" data-act="cmset">Edit committee</button></div>`}
+function openCommittee(){const m=S.committee||{};
+  openSheet(sheetHd('Committee')+`<div class="lbl">First instalment month</div><input class="inp" id="cmStart" type="month" value="${esc(m.start||'')}"><div class="lbl">Number of months</div><input class="inp" id="cmMonths" inputmode="numeric" value="${m.months||''}" placeholder="e.g. 15"><div class="lbl">Your share each month</div><input class="inp" id="cmShare" inputmode="decimal" value="${m.share||''}" placeholder="0"><div class="lbl">Passed on for someone else each month (optional)</div><input class="inp" id="cmFriend" inputmode="decimal" value="${m.friend||''}" placeholder="0"><div class="lbl">Your payout amount (optional)</div><input class="inp" id="cmPayout" inputmode="decimal" value="${m.payout||''}" placeholder="0"><div class="lbl">Payout month (optional)</div><input class="inp" id="cmPayM" type="month" value="${esc(m.payoutMonth||'')}"><button class="btn" data-act="cmsave">Save</button>${S.committee?'<button class="btn danger" data-act="cmdel">Remove committee</button>':''}`)}
+function balanceCard(){const b=balances();const ck=S.checks||{};
+  return `<div class="card"><h2>Balance check</h2><div class="sub" style="margin-bottom:6px">Type what your bank or wallet shows. The gap is money that moved without being logged.</div>${S.accounts.filter(a=>!a.closed).map(a=>`<div class="bcrow"><div class="row"><b class="grow">${esc(a.name)}</b><span class="sub num">Paisa says ${fmt(b[a.id]||0)}</span></div><div class="field" style="margin-top:6px"><input class="inp bc" data-id="${a.id}" inputmode="decimal" placeholder="Actual balance" autocomplete="off"></div><div class="bcgap" id="gap-${a.id}">${ck[a.id]?'<span class="sub">Last checked '+shortDate(ck[a.id].date)+': '+(ck[a.id].gap?fmt(Math.abs(ck[a.id].gap))+(ck[a.id].gap<0?' missing':' extra'):'matched')+'</span>':''}</div></div>`).join('')||needMore('Add an account first.')}</div>`}
+function bcGap(id,val){const v=calc(val);const el=$('#gap-'+id);if(!el)return;if(isNaN(v)){el.innerHTML='';return}const app=balances()[id]||0;const g=Math.round(v-app);
+  el.innerHTML=g===0?'<span class="good">Matches. Nothing untracked.</span>':`<span class="${g<0?'bad':'good'}">${g<0?fmt(-g)+' has left this account without an entry.':fmt(g)+' more than Paisa expects.'}</span><button class="btn sm ghost" data-act="bcfix" data-id="${id}" style="margin-top:6px">Record the gap as ${g<0?'an Untracked expense':'Other Income'}</button>`}
+function bcFix(id){const inp=document.querySelector('.bc[data-id="'+id+'"]');const v=calc(inp?inp.value:'');if(isNaN(v))return;const app=balances()[id]||0;const g=Math.round(v-app);S.checks=S.checks||{};
+  if(g!==0){const type=g<0?'expense':'income';const nm=g<0?'Untracked':'Other Income';let c=S.categories.find(x=>x.type===type&&x.name.toLowerCase()===nm.toLowerCase());if(!c){c={id:uid(),name:nm,type,icon:'dots',col:8};S.categories.push(c)}
+    S.entries.push({id:uid(),type,amount:Math.abs(g),date:today(),note:'Balance check',acc:id,cat:c.id,ts:Date.now()})}
+  S.checks[id]={date:today(),gap:g};save();render();toast(g?'Recorded '+fmt(Math.abs(g))+'. '+accName(id)+' now matches.':'Marked as matched.')}
+function whatIfCard(){
+  const {c}=curCycles(),st=cycStats(c);const cut=+(V.cut||50);const scale=inCyc(c,today())?30/elapsedOf(c):1;const fl=st.exp.filter(isFlex);
+  const cats={};for(const e of fl)cats[e.cat]=(cats[e.cat]||0)+e.amount;
+  const rows=[...Object.values(noteGroups(fl)).filter(x=>x.n>=2).sort((a,b)=>b.s-a.s).slice(0,5).map(x=>({l:x.label,m:x.s*scale})),...Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>({l:'All '+catName(k),m:v*scale}))];
+  return `<div class="card"><h2>What if you cut back?</h2><div class="seg" style="margin-bottom:8px">${[25,50,100].map(p=>`<button data-act="cut" data-id="${p}" class="${cut===p?'on':''}">${p===100?'Stop':'Cut '+p+'%'}</button>`).join('')}</div>${rows.length?`<table class="t"><tr><th>Spending</th><th>A month</th><th>Saved a year</th></tr>${rows.map(r=>`<tr><td>${esc(r.l)}</td><td>${fnum(r.m)}</td><td><b>${fnum(r.m*12*cut/100)}</b></td></tr>`).join('')}</table>`:needMore('Flexible spending in '+esc(c.label)+' is listed here once there is some.')}<div class="sub" style="padding-top:6px">Based on ${esc(c.label)}${scale!==1?', scaled up to a full month':''}. Flexible spending only.</div></div>`}
+function rTools(){return committeeCard()+balanceCard()+whatIfCard()}
 
 /* ---------- SETTINGS ---------- */
 function renderSettings(){
@@ -500,11 +679,12 @@ function renderSettings(){
   const sty=S.settings.style||'classic';
   h+=`<div class="card"><h2>Appearance</h2><div class="seg">${[['classic','Classic'],['slate','Slate'],['amoled','AMOLED']].map(([k,l])=>`<button data-act="style" data-id="${k}" class="${sty===k?'on':''}">${l}</button>`).join('')}</div><div class="sub" style="margin:8px 2px">${{classic:'The original green look.',slate:'Flatter and quieter, with a navy accent.',amoled:'True black and almost no colour. Always dark.'}[sty]}</div>${sty==='amoled'?'':`<div class="seg">${['auto','light','dark'].map(t=>`<button data-act="theme" data-id="${t}" class="${(S.settings.theme||'auto')===t?'on':''}">${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>`}</div>`;
   h+=`<div class="card"><h2>Large entries</h2><div class="sub">Entries of this amount or more are highlighted in lists.</div><div class="field"><input id="bigAt" inputmode="numeric" value="${bigAt()}"></div></div>`;
+  h+=`<div class="card"><h2>Small spends</h2><div class="sub">Entries under this amount are counted as small spends in Reports.</div><div class="field"><input id="smallAt" inputmode="numeric" value="${smallAt()}"></div></div>`;
   h+=`<div class="card"><h2>PIN lock</h2><div class="sub">${S.settings.pin?'A 4-digit PIN is asked when the app opens.':'Ask for a 4-digit PIN when the app opens.'} It keeps casual eyes out. It does not encrypt your data.</div><button class="btn ghost" data-act="pin">${S.settings.pin?'Remove PIN':'Set PIN'}</button></div>`;
   h+=`<div class="card"><h2>Your data</h2><div class="sub">Everything is stored only on this device. ${lb?'Last backup: '+nice(lb)+' '+pd(lb).getFullYear()+'.':'<b class="bad">No backup saved yet.</b>'}</div><button class="btn" data-act="backup">Save a backup</button><button class="btn ghost" data-act="restore">Restore a backup</button><button class="btn ghost" data-act="xlsx">Export to Excel</button><button class="btn ghost" data-act="import">Import from Hysab Kytab</button><button class="btn danger" data-act="wipe">Wipe all data</button></div>`;
   h+=`<div class="sub" style="text-align:center;margin:14px">Paisa ${APPV} · ${S.entries.length} entries</div>`;
   return h}
-const APPV='1.2';
+const APPV='1.3';
 
 /* ---------- render ---------- */
 function render(kind){
@@ -586,9 +766,9 @@ function openAcct(id){const a=id?acc(id):null;const used=a&&S.entries.some(e=>e.
   openSheet(sheetHd(a?'Edit account':'Add account')+`<div class="lbl">Name</div><input class="inp" id="an" value="${esc(a?a.name:'')}" placeholder="e.g. HBL, Cash" autocomplete="off"><div class="lbl">Opening balance</div><input class="inp" id="ao" inputmode="decimal" value="${a?(+a.opening||0):''}" placeholder="0"><div class="sub" style="margin:6px 2px">What the account held before your first entry here.</div><button class="btn" data-act="acctsave" data-id="${id||''}">Save</button>${a?`<button class="btn ghost" data-act="acctclose" data-id="${id}">${a.closed?'Reopen account':'Close account'}</button><div class="sub" style="margin:6px 2px">Closing hides it when adding entries. Its history stays in your reports.</div>${used?'':`<button class="btn danger" data-act="acctdel" data-id="${id}">Delete account</button>`}`:''}`)}
 let CE=null,DONUT=[];
 function donutTap(ev,svgEl){const r=svgEl.getBoundingClientRect();const x=(ev.clientX-r.left)/r.width*200-100,y=(ev.clientY-r.top)/r.height*200-100;const d=Math.hypot(x,y);if(d<50||d>90)return;let ang=Math.atan2(x,-y);if(ang<0)ang+=2*Math.PI;let f=ang/(2*Math.PI),acc=0;for(const g of DONUT){acc+=g.f;if(f<=acc){if(g.k!=='__other')openCatView(g.k);return}}}
-function openCat(id,t){const c=id?cat(id):null;CE={id:id||'',type:c?c.type:t,name:c?c.name:'',...(c?catLook(c):{icon:'tag',col:1})};drawCat()}
+function openCat(id,t){const c=id?cat(id):null;CE={id:id||'',type:c?c.type:t,name:c?c.name:'',fixed:c?isFixed(c):false,...(c?catLook(c):{icon:'tag',col:1})};drawCat()}
 function drawCat(){sameSheet=!!$('#cn');const c=CE.id?cat(CE.id):null;const used=c&&S.entries.some(e=>e.cat===CE.id);
-  openSheet(sheetHd(c?'Edit category':'Add category')+`<div class="lbl">Name</div><input class="inp" id="cn" value="${esc(CE.name)}" autocomplete="off"><div class="lbl">Colour</div><div class="swatches">${[1,2,3,4,5,6,7,8].map(n=>`<button data-act="cecol" data-id="${n}" class="${CE.col==n?'on':''}" style="--c:var(--s${n})" aria-label="Colour ${n}"></button>`).join('')}</div><div class="lbl">Icon</div><div class="icons">${Object.keys(CI).filter(k=>k!=='swap').map(k=>`<button data-act="ceicon" data-id="${k}" class="${CE.icon===k?'on':''}" aria-label="${k}">${gsvg(k)}</button>`).join('')}</div><button class="btn" data-act="catsave" data-id="${CE.id}" data-t="${CE.type}">Save</button>${c?`<button class="btn ghost" data-act="cathide" data-id="${CE.id}">${c.hidden?'Show when adding entries':'Hide when adding entries'}</button>${used?'<div class="sub" style="margin:6px 2px">It has entries, so it can be hidden but not deleted.</div>':`<button class="btn danger" data-act="catdel" data-id="${CE.id}">Delete category</button>`}`:''}`)}
+  openSheet(sheetHd(c?'Edit category':'Add category')+`<div class="lbl">Name</div><input class="inp" id="cn" value="${esc(CE.name)}" autocomplete="off"><div class="lbl">Colour</div><div class="swatches">${[1,2,3,4,5,6,7,8].map(n=>`<button data-act="cecol" data-id="${n}" class="${CE.col==n?'on':''}" style="--c:var(--s${n})" aria-label="Colour ${n}"></button>`).join('')}</div><div class="lbl">Icon</div><div class="icons">${Object.keys(CI).filter(k=>k!=='swap').map(k=>`<button data-act="ceicon" data-id="${k}" class="${CE.icon===k?'on':''}" aria-label="${k}">${gsvg(k)}</button>`).join('')}</div>${CE.type==='expense'?`<button class="sw ${CE.fixed?'on':''}" data-act="cefix"><span class="grow"><b>Fixed cost</b><span>Bills, committee, loans: costs you cannot easily change month to month.</span></span><span class="tog"></span></button>`:''}<button class="btn" data-act="catsave" data-id="${CE.id}" data-t="${CE.type}">Save</button>${c?`<button class="btn ghost" data-act="cathide" data-id="${CE.id}">${c.hidden?'Show when adding entries':'Hide when adding entries'}</button>${used?'<div class="sub" style="margin:6px 2px">It has entries, so it can be hidden but not deleted.</div>':`<button class="btn danger" data-act="catdel" data-id="${CE.id}">Delete category</button>`}`:''}`)}
 function openList(title,es){es=sortE(es);const sp=es.reduce((s,e)=>s+e.amount,0);
   openSheet(sheetHd(title)+`<div class="sub">${es.length} entr${es.length===1?'y':'ies'} · ${fmt(sp)}</div><div class="card" style="padding-top:2px">${es.map(e=>entryRow(e,true)).join('')||'<div class="empty">Nothing here.</div>'}</div>`)}
 function reportList(k,id){const {c}=curCycles(),st=cycStats(c);
@@ -596,6 +776,10 @@ function reportList(k,id){const {c}=curCycles(),st=cycStats(c);
   if(k==='salary')return openList('Salary · '+esc(c.label),st.es.filter(isSalary));
   if(k==='potin')return openList('Payout and other income',S.entries.filter(e=>e.type==='income'&&!isSalary(e)));
   if(k==='potout')return openList('Spent from payout',S.entries.filter(e=>e.type==='expense'&&e.payout));
+  if(k==='fixed')return openList('Fixed costs · '+esc(c.label),st.exp.filter(e=>!e.payout&&isFixed(cat(e.cat))));
+  if(k==='flex')return openList('Flexible spending · '+esc(c.label),st.exp.filter(e=>!e.payout&&!isFixed(cat(e.cat))));
+  if(k==='day')return openList(nice(id),S.entries.filter(e=>e.date===id&&e.type==='expense'));
+  if(k==='small')return openList('Under '+fmt(smallAt())+' · '+esc(c.label),st.exp.filter(e=>!e.payout&&e.amount<smallAt()));
   if(k==='note')return openList('“'+esc(id)+'” · '+esc(c.label),st.exp.filter(e=>normNote(e.note)===id))}
 function openCatView(k){const {c}=curCycles();const es=sortE(S.entries.filter(e=>e.type==='expense'&&(e.cat||'')===k&&inCyc(c,e.date)));
   openSheet(sheetHd(esc(catName(k))+' · '+esc(c.label))+`<div class="sub">${es.length} entr${es.length===1?'y':'ies'} · ${fmt(es.reduce((s,e)=>s+e.amount,0))}</div><div class="card" style="padding-top:2px">${es.map(e=>entryRow(e,true)).join('')}</div>`)}
@@ -693,12 +877,20 @@ document.addEventListener('click',ev=>{
     case 'acctclose':{const x=acc(id);x.closed=!x.closed;save();closeSheet();render();break}
     case 'acctdel':S.accounts=S.accounts.filter(x=>x.id!==id);save();closeSheet();render();break;
     case 'catedit':openCat(id,el.dataset.t);break;
-    case 'catsave':{const n=$('#cn').value.trim();if(!n)return toast('Give the category a name.');const t=el.dataset.t;if(S.categories.some(x=>x.id!==id&&x.type===t&&x.name.toLowerCase()===n.toLowerCase()))return toast('That name is already used.');if(id){const x=cat(id);x.name=n;x.icon=CE.icon;x.col=+CE.col}else S.categories.push({id:uid(),name:n,type:t,icon:CE.icon,col:+CE.col});save();closeSheet();render();break}
+    case 'catsave':{const n=$('#cn').value.trim();if(!n)return toast('Give the category a name.');const t=el.dataset.t;if(S.categories.some(x=>x.id!==id&&x.type===t&&x.name.toLowerCase()===n.toLowerCase()))return toast('That name is already used.');if(id){const x=cat(id);x.name=n;x.icon=CE.icon;x.col=+CE.col;if(t==='expense')x.fixed=!!CE.fixed}else S.categories.push({id:uid(),name:n,type:t,icon:CE.icon,col:+CE.col,...(t==='expense'?{fixed:!!CE.fixed}:{})});save();closeSheet();render();break}
     case 'cecol':CE.name=$('#cn').value;CE.col=+id;drawCat();break;
     case 'ceicon':CE.name=$('#cn').value;CE.icon=id;drawCat();break;
     case 'rlist':reportList(el.dataset.k,id);break;
+    case 'rtab':V.rtab=id;window.scrollTo(0,0);render('tab');break;
+    case 'wrap':V.wrap=id;render();break;
+    case 'cut':V.cut=id;render();break;
+    case 'cefix':CE.name=$('#cn').value;CE.fixed=!CE.fixed;el.classList.toggle('on',CE.fixed);break;
+    case 'cmset':openCommittee();break;
+    case 'cmsave':{const st=$('#cmStart').value,mo=Math.round(calc($('#cmMonths').value)),sh=calc($('#cmShare').value);if(!st||!(mo>0)||!(sh>0))return toast('Fill in the first month, number of months and your share.');S.committee={start:st,months:mo,share:sh,friend:calc($('#cmFriend').value)||0,payout:calc($('#cmPayout').value)||0,payoutMonth:$('#cmPayM').value||''};save();closeSheet();render();break}
+    case 'cmdel':delete S.committee;save();closeSheet();render();break;
+    case 'bcfix':bcFix(id);break;
     case 'donut':donutTap(ev,el);break;
-    case 'gocyc':V.key=id;window.scrollTo(0,0);render('tab');break;
+    case 'gocyc':V.key=id;V.rtab='month';window.scrollTo(0,0);render('tab');break;
     case 'cathide':{const x=cat(id);x.hidden=!x.hidden;save();closeSheet();render();break}
     case 'catdel':S.categories=S.categories.filter(x=>x.id!==id);save();closeSheet();render();break;
     case 'theme':S.settings.theme=id;save();applyTheme();render();break;
@@ -719,14 +911,16 @@ document.addEventListener('click',ev=>{
 document.addEventListener('input',ev=>{const t=ev.target;
   if(t.id==='q'){V.q=t.value;render()}
   else if(t.id==='amt'){F.amount=t.value;showCalc()}
+  else if(t.classList.contains('bc'))bcGap(t.dataset.id,t.value);
 });
 document.addEventListener('change',ev=>{const t=ev.target;
   if(t.id==='fAcc'){V.fAcc=t.value;render()}
   else if(t.id==='fCat'){V.fCat=t.value;render()}
   else if(t.id==='date'&&F){syncF();if(F.type==='income')drawEntry()}
   else if(t.id==='bigAt'){const v=calc(t.value);S.settings.bigAt=v>0?v:50000;save();render()}
+  else if(t.id==='smallAt'){const v=calc(t.value);S.settings.smallAt=v>0?v:2000;save();render()}
 });
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&V.sheet)closeSheet();if(ev.key==='Enter'&&F&&(ev.target.id==='amt'||ev.target.id==='note')){ev.preventDefault();saveEntry()}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&V.sheet)closeSheet();if(ev.key==='Enter'&&F&&$('#amt')&&(ev.target.id==='amt'||ev.target.id==='note')){ev.preventDefault();saveEntry()}});
 
 /* ---------- start ---------- */
 applyTheme();render('tab');
