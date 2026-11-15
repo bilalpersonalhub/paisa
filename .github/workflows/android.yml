@@ -1,0 +1,52 @@
+name: Build Android app
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Load signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.PAISA_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.PAISA_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Add the repository secrets PAISA_KEYSTORE_B64 and PAISA_KEYSTORE_PASSWORD (Settings > Secrets and variables > Actions), then re-run this workflow."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/paisa.jks"
+
+      - name: Build signed APK
+        env:
+          PAISA_KEYSTORE_FILE: ${{ runner.temp }}/paisa.jks
+          PAISA_KEYSTORE_PASSWORD: ${{ secrets.PAISA_KEYSTORE_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+        run: gradle -p android assembleRelease --no-daemon --stacktrace
+
+      - name: Publish to Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk paisa.apk
+          gh release create "v1.0.${{ github.run_number }}" paisa.apk \
+            --title "Paisa 1.0.${{ github.run_number }}" \
+            --notes "Download paisa.apk on your phone and open it to install or update."

@@ -1,0 +1,55 @@
+plugins {
+    id 'com.android.application'
+}
+
+def keystorePath = System.getenv('PAISA_KEYSTORE_FILE')
+
+android {
+    namespace 'app.paisa.tracker'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.paisa.tracker'
+        minSdk 24
+        targetSdk 34
+        versionCode((System.getenv('VERSION_CODE') ?: '1') as int)
+        versionName(System.getenv('VERSION_NAME') ?: '1.0')
+    }
+
+    // The web app in /docs is packaged as the APK's assets, so there is one copy of the app.
+    sourceSets {
+        main {
+            assets.srcDirs = ['../../docs']
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv('PAISA_KEYSTORE_PASSWORD')
+                keyAlias 'paisa'
+                keyPassword System.getenv('PAISA_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystorePath) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}
