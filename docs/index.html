@@ -444,6 +444,7 @@ function renderHome(){
   h+=backupNudge();
   h+=meterCard(c,st,isCur);
   h+=dueCard();
+  h+=homeCard();
   h+=`<div class="card"><h2>What you have</h2><div class="big num" style="font-size:24px">${fmt(total)}</div><div class="chips" style="margin-top:10px">${open.map(a=>`<button class="acct" data-act="acctview" data-id="${a.id}"><b>${esc(a.name)}</b><span>${fmt(b[a.id]||0)}</span></button>`).join('')||'<span class="sub">No accounts yet. Add one in Settings.</span>'}</div></div>`;
   const rec=sortE(st.es).slice(0,6);
   h+=`<div class="card"><h2>Recent</h2>${rec.map(e=>entryRow(e,true)).join('')||'<div class="empty">Nothing logged in '+esc(c.label)+' yet.<br>Tap + to add an entry.</div>'}${st.es.length>6?'<button class="btn ghost" data-act="tab" data-id="entries">See all '+st.es.length+'</button>':''}</div>`;
@@ -708,7 +709,7 @@ function openSnaps(){const ks=snapKeys().reverse();
   openSheet(sheetHd('Restore points')+`<div class="sub">Paisa keeps a copy from the start of each day you change something, and one before every import, restore or wipe. The newest six are kept on this device.</div><div class="card list" style="margin-top:10px">${ks.map(k=>{let n=0;try{n=JSON.parse(localStorage.getItem(k)).entries.length}catch(e){}return `<button class="li" data-act="snapask" data-id="${esc(k)}"><span class="grow"><b>${esc(snapLabel(k))}</b><span>${n} entries</span></span><span class="chev">›</span></button>`}).join('')||'<div class="empty">No restore points yet. The first is made the next time you change something.</div>'}</div>`)}
 function snapRestore(k){let d;try{d=JSON.parse(localStorage.getItem(k))}catch(e){}if(!d||!Array.isArray(d.entries))return toast('That restore point could not be read.');snapBefore('rollback');S=d;S.mem=S.mem||{};S.settings=S.settings||{};save();V.key=null;applyTheme();closeSheet();render();toast('Rolled back to '+snapLabel(k)+'.')}
 
-function loggedToday(){const t=today();return S.entries.some(e=>e.date===t||(e.ts&&iso(new Date(e.ts))===t))}
+function loggedToday(){const t=today();const f=e=>e.date===t||(e.ts&&iso(new Date(e.ts))===t);return S.entries.some(f)||(S.cardTx||[]).some(f)}
 function afterSave(){try{localStorage.setItem('paisa.dirty','1')}catch(e){}if(has('setLastLogged'))try{BR().setLastLogged(loggedToday()?today():'')}catch(e){}}
 function autoBackupNow(force){if(!has('autoBackup')||!has('backupFolder'))return;let dirty=false;try{dirty=localStorage.getItem('paisa.dirty')==='1'}catch(e){}
   if(!S.entries.length||(!dirty&&!force))return;let folder='';try{folder=BR().backupFolder()}catch(e){}if(!folder)return;
@@ -727,7 +728,7 @@ function quickLog(i){const f=FAV[+i];if(!f)return;const e={id:uid(),type:'expens
   toast('Logged '+f.note+', '+fmt(f.amount),{label:'Undo',fn:()=>{S.entries=S.entries.filter(x=>x.id!==e.id);save();render()}})}
 let SUG=[];
 function noteSuggest(q){q=normNote(q);const el=$('#sugg');if(!el||!F)return;if(q.length<2){el.innerHTML='';SUG=[];return}
-  const g={};for(const e of S.entries){if(e.type!==F.type||e.refund)continue;const k=normNote(e.note);if(!k||k===q||k.indexOf(q)<0)continue;(g[k]=g[k]||[]).push(e)}
+  const g={};for(const e of (F.type==='card'?(S.cardTx||[]):S.entries)){if((F.type!=='card'&&e.type!==F.type)||e.refund||e.amount<0)continue;const k=normNote(e.note);if(!k||k===q||k.indexOf(q)<0)continue;(g[k]=g[k]||[]).push(e)}
   SUG=Object.values(g).sort((a,b)=>b.length-a.length).slice(0,4).map(l=>{const last=sortE(l)[0];return {note:last.note.trim(),cat:last.cat,acc:last.acc,amount:usualAmount(l)}});
   el.innerHTML=SUG.map((s,i)=>`<button data-act="sugg" data-id="${i}">${esc(s.note)} <span class="sub">${fnum(s.amount)}</span></button>`).join('')}
 function dueItems(){const {cs,i,c}=curCycles();if(!inCyc(c,today())||i<1)return [];const prev=cs[i-1];const idx=daysBetween(c.start,today());
@@ -770,6 +771,57 @@ window.paisaAction=runAction;
 window.paisaBio=ok=>{const l=$('#lock');if(ok&&l&&l.dataset.mode==='unlock'){l.remove();unlocked()}};
 function unlocked(){if(pendAct){const a=pendAct;pendAct='';runAction(a)}}
 
+/* ---------- credit card: an itemised list kept apart from the main entries ---------- */
+const dim=(y,m)=>new Date(y,m+1,0).getDate();
+const dayIn=(y,m,d)=>iso(new Date(y,m,Math.min(d,dim(y,m))));
+function stmtClose(d){const D=+S.card.stmtDay;const x=pd(d);let y=x.getFullYear(),m=x.getMonth();let c=dayIn(y,m,D);if(c<d){m++;if(m>11){m=0;y++}c=dayIn(y,m,D)}return c} // first statement date on or after d
+function stmtPrev(c){const x=pd(c);let y=x.getFullYear(),m=x.getMonth()-1;if(m<0){m=11;y--}return dayIn(y,m,+S.card.stmtDay)}
+function stmtNext(c){return stmtClose(addDays(c,1))}
+function stmtDue(c){const U=+S.card.dueDay;const x=pd(c);let y=x.getFullYear(),m=x.getMonth();let d=dayIn(y,m,U);if(d<=c){m++;if(m>11){m=0;y++}d=dayIn(y,m,U)}return d} // first due day after the statement date
+const isCardBill=e=>e.type==='expense'&&/cc bill|credit card|card bill/i.test(catName(e.cat));
+function stmtInfo(c){const from=addDays(stmtPrev(c),1);const items=(S.cardTx||[]).filter(e=>e.date>=from&&e.date<=c);const nx=stmtNext(c);
+  const bills=S.entries.filter(e=>isCardBill(e)&&e.date>c&&e.date<=nx);
+  return {c,from,items,total:sum(items,e=>e.amount),bills,paid:sum(bills,e=>e.amount),bank:+(((S.cardStm||{})[c]||{}).bank)||0,due:stmtDue(c)}}
+const inDays=d=>{const n=daysBetween(today(),d);return n===0?'today':n===1?'tomorrow':n>0?'in '+n+' days':n===-1?'yesterday':(-n)+' days ago'};
+function cardUsage(){const m={};for(const e of (S.cardTx||[]))m[e.cat]=(m[e.cat]||0)+1;return m}
+function cardRow(e){const rf=e.amount<0;const big=e.amount>=bigAt();
+  return `<button class="entry ${rf?'inc':''} ${big?'lg':''}" data-act="cardedit" data-id="${e.id}">${catDot(e.cat)}<span class="grow" style="flex:1;min-width:0"><div class="t">${esc(catName(e.cat))}${rf?'<span class="tag s">refund</span>':''}${big?'<span class="tag b">large</span>':''}</div><div class="s">${[e.note,nice(e.date)].filter(Boolean).map(esc).join(' · ')}</div></span><span class="a">${rf?'+':'−'}${fmt(Math.abs(e.amount))}</span></button>`}
+function cardHint(){if(!S.card)return '';const c=stmtClose(F.date||today());return `<div class="note" style="margin-top:12px">Goes on the statement dated <b>${shortDate(c)}</b>, due ${shortDate(stmtDue(c))}. Card purchases stay out of your main entries, balances and salary meter. The bill you pay is what counts there.</div>`}
+
+function homeCard(){if(!S.card||!S.card.stmtDay)return '';const cur=stmtInfo(stmtClose(today()));const prev=stmtInfo(stmtPrev(cur.c));const owed=prev.bank||prev.total;
+  let last='';if(prev.paid)last=`<div class="kv"><span>Last bill</span><b class="num good">Paid ${fmt(prev.paid)}</b></div>`;
+  else if(owed>0){const late=today()>prev.due;last=`<div class="kv"><span>Last bill, due ${shortDate(prev.due)}</span><b class="num ${late?'bad':''}">${fmt(owed)} · ${late?'overdue':inDays(prev.due)}</b></div>`}
+  return `<button class="card" data-act="cardopen"><h2>${esc(S.card.name||'Credit card')} ›</h2><div class="row"><div class="big num grow" style="font-size:24px">${fmt(cur.total)}</div><span class="sub">${cur.items.length} purchase${cur.items.length===1?'':'s'} this statement</span></div><div class="kv" style="margin-top:6px"><span>Statement date</span><b class="num">${shortDate(cur.c)} · ${inDays(cur.c)}</b></div><div class="kv"><span>That bill is due</span><b class="num">${shortDate(cur.due)}</b></div>${last}</button>`}
+
+function openCard(c){if(!S.card||!S.card.stmtDay)return openCardSetup();V.cardC=c||stmtClose(today());drawCardFresh()}
+function drawCard(){sameSheet=sameSheet&&!!$('#cdBank');const cur=stmtClose(today());const c=!V.cardC||V.cardC>cur?cur:V.cardC;V.cardC=c;const st=stmtInfo(c);const isCur=c===cur;const hasOlder=(S.cardTx||[]).some(e=>e.date<st.from)||S.entries.some(e=>isCardBill(e)&&e.date<=c);
+  const ct={};for(const e of st.items)ct[e.cat]=(ct[e.cat]||0)+e.amount;const rows=Object.entries(ct).filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]);const mx=rows.length?rows[0][1]:1;
+  const ref=st.bank||st.paid;const diff=ref-st.total;
+  let cmp='';
+  if(st.items.length&&ref>0)cmp=`<div class="kv"><span>${st.bank?'Bank’s figure minus your entries':'Bill paid minus your entries'}</span><b class="num ${diff>0?'bad':''}">${diff>0?'+':diff<0?'−':''}${fmt(Math.abs(diff))}</b></div><div class="note ${diff>0?'w':''}" style="margin-top:8px">${diff===0?'Your entries match the bill exactly.':diff>0?`The bank charged <b>${fmt(diff)}</b> more than you itemised. That is fees, interest, or purchases you did not log.`:`You itemised <b>${fmt(-diff)}</b> more than the bill. A purchase may have landed on the next statement, or been refunded.`}</div>`;
+  else if(ref>0)cmp=`<div class="sub" style="padding-top:6px">No purchases are itemised for this statement, so there is nothing to compare the bill with.</div>`;
+  else if(st.items.length)cmp=`<div class="sub" style="padding-top:6px">${isCur?'When the statement arrives, type its total above to see how it compares.':'Type the statement total above, or log the payment under your CC Bill category, to see how it compares.'}</div>`;
+  const paidLine=st.paid?`<div class="kv"><span>CC Bill you logged${st.bills.length===1?', '+shortDate(st.bills[0].date):''}</span><b class="num">${fmt(st.paid)}</b></div>${st.bank&&st.paid!==st.bank?`<div class="kv"><span>${st.paid<st.bank?'Still unpaid on this statement':'Paid above the statement'}</span><b class="num ${st.paid<st.bank?'bad':''}">${fmt(Math.abs(st.bank-st.paid))}</b></div>`:''}`:`<div class="kv"><span>CC Bill you logged</span><b class="num sub">${isCur?'Not due yet':'None yet'}</b></div>`;
+  openSheet(sheetHd(esc(S.card.name||'Credit card'))+`<div class="row" style="margin-bottom:8px"><div class="monthnav" style="flex:1;justify-content:space-between"><button data-act="cardnav" data-d="-1" ${hasOlder?'':'disabled'} aria-label="Earlier statement">‹</button><span>${shortDate(st.from)} to ${shortDate(c)}</span><button data-act="cardnav" data-d="1" ${isCur?'disabled':''} aria-label="Later statement">›</button></div></div>
+  <div class="card" style="margin-top:0"><h2>${isCur?'This statement so far':'Statement of '+shortDate(c)}</h2><div class="kv"><span>Your itemised total</span><b class="num">${fmt(st.total)}</b></div><div class="kv" style="align-items:center"><span>Bank’s statement total</span><input class="inp" id="cdBank" inputmode="decimal" value="${st.bank||''}" placeholder="${isCur?'When it arrives':'Type it in'}" style="flex:0 0 130px;text-align:right;padding:7px 10px"></div>${paidLine}${cmp}</div>
+  <div class="card"><h2>Dates</h2><div class="kv"><span>Statement date</span><b class="num">${shortDate(c)} · ${inDays(c)}</b></div><div class="kv"><span>Payment due</span><b class="num ${!st.paid&&!isCur&&today()>st.due?'bad':''}">${shortDate(st.due)} · ${st.paid?'paid':inDays(st.due)}</b></div></div>
+  ${rows.length?`<div class="card"><h2>Where it went</h2>${rows.map(([k,v])=>`<div class="catrow"><div class="row">${catDot(k,true)}<span class="grow" style="flex:1;min-width:0"><div class="row" style="gap:6px"><span class="grow" style="flex:1;font-weight:600">${esc(catName(k))}</span><b class="num">${fmt(v)}</b><span class="sub num" style="width:34px;text-align:right">${Math.round(v/Math.max(1,st.total)*100)}%</span></div><div class="bar" style="--c:var(--s${catLook(cat(k)).col})"><i style="width:${v/mx*100}%"></i></div></span></div></div>`).join('')}</div>`:''}
+  <div class="card" style="padding-top:${st.items.length?2:14}px">${st.items.length?sortE(st.items).map(cardRow).join(''):'<div class="empty">No card purchases itemised for this statement.</div>'}</div>
+  <button class="btn" data-act="cardadd">Add a card purchase</button><button class="btn ghost" data-act="cardset">Card settings</button>`)}
+function openCardSetup(){const k=S.card||{};
+  openSheet(sheetHd(S.card?'Card settings':'Set up your card')+`<div class="sub">Itemise what you put on the card here. These purchases stay out of your main entries and balances; you keep logging the bill you pay as a CC Bill expense, as you do now.</div><div class="lbl">Card name</div><input class="inp" id="ckName" value="${esc(k.name||'')}" placeholder="e.g. Askari Visa" autocomplete="off"><div class="lbl">Statement date: day of the month</div><input class="inp" id="ckStmt" inputmode="numeric" value="${k.stmtDay||''}" placeholder="e.g. 20"><div class="lbl">Payment due: day of the month</div><input class="inp" id="ckDue" inputmode="numeric" value="${k.dueDay||''}" placeholder="e.g. 10"><div class="sub" style="margin:6px 2px">A purchase goes on the first statement dated on or after it. In shorter months a day such as 31 moves to the last day.</div><button class="btn" data-act="cardsave">Save</button>${S.card?'<button class="btn danger" data-act="cardoff">Stop tracking this card</button>':''}`)}
+function saveCardItem(){syncF();const amt=calc(F.amount);if(!(amt>0))return toast('Enter an amount.');if(!F.cat)return toast('Pick a category.');
+  S.cardTx=S.cardTx||[];const e={id:F.edit?F.cardId:uid(),amount:(F.refund?-1:1)*amt,date:F.date,note:(F.note||'').trim(),cat:F.cat,ts:F.edit?F.ts:Date.now()};
+  if(F.edit){const i=S.cardTx.findIndex(x=>x.id===e.id);if(i>=0)S.cardTx[i]=e;else S.cardTx.push(e)}else S.cardTx.push(e);
+  S.mem.cardCat=e.cat;const back=F.back;save();render();toast('Saved to the card');
+  if(back){F=null;V.cardC=stmtClose(e.date);drawCardFresh()}else closeSheet()}
+function drawCardFresh(){sameSheet=false;drawCard()}
+function drawCardKeep(){sameSheet=true;drawCard()}
+function openCardItem(id,back){const e=(S.cardTx||[]).find(x=>x.id===id);
+  F=e?{type:'card',edit:true,cardId:e.id,ts:e.ts,amount:String(Math.abs(e.amount)),refund:e.amount<0,date:e.date,note:e.note||'',cat:e.cat,acc:null,back:!!back}:{type:'card',amount:'',date:today(),note:'',cat:null,acc:null,toAcc:null,payout:false,startsMonth:false,refund:false,splits:[],back:!!back};
+  if(!e){const c=cat(S.mem.cardCat);F.cat=c&&!c.hidden?c.id:null}
+  sameSheet=false;drawEntry()}
+
 /* ---------- SETTINGS ---------- */
 function renderSettings(){
   const b=balances();const lb=S.settings.lastBackup;
@@ -778,6 +830,7 @@ function renderSettings(){
   const cl=t=>S.categories.filter(x=>x.type===t).map(x=>`<button class="li" data-act="catedit" data-id="${x.id}">${catDot(x.id,true)}<span class="grow"><b>${esc(x.name)}${x.hidden?' <span class="tag" style="background:var(--line);color:var(--mute)">hidden</span>':''}</b></span><span class="chev">›</span></button>`).join('');
   h+=`<div class="card list"><h2>Expense categories</h2>${cl('expense')}<button class="btn ghost" data-act="catedit" data-id="" data-t="expense">Add expense category</button></div>`;
   h+=`<div class="card list"><h2>Income categories</h2>${cl('income')}<button class="btn ghost" data-act="catedit" data-id="" data-t="income">Add income category</button></div>`;
+  h+=`<div class="card"><h2>Credit card</h2><div class="sub">${S.card?esc(S.card.name||'Your card')+': statement on day '+S.card.stmtDay+', payment due on day '+S.card.dueDay+'. '+(S.cardTx||[]).length+' purchases itemised.':'Itemise card purchases apart from your main entries, and compare them with the bill.'}</div><button class="btn ghost" data-act="${S.card?'cardopen':'cardset'}">${S.card?'Open card':'Set up a card'}</button>${S.card?'<button class="btn ghost" data-act="cardset">Card settings</button>':''}</div>`;
   const sty=S.settings.style||'classic';
   h+=`<div class="card"><h2>Appearance</h2><div class="seg">${[['classic','Classic'],['slate','Slate'],['amoled','AMOLED']].map(([k,l])=>`<button data-act="style" data-id="${k}" class="${sty===k?'on':''}">${l}</button>`).join('')}</div><div class="sub" style="margin:8px 2px">${{classic:'The original green look.',slate:'Flatter and quieter, with a navy accent.',amoled:'True black and almost no colour. Always dark.'}[sty]}</div>${sty==='amoled'?'':`<div class="seg">${['auto','light','dark'].map(t=>`<button data-act="theme" data-id="${t}" class="${(S.settings.theme||'auto')===t?'on':''}">${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div>`}</div>`;
   h+=`<div class="card"><h2>Large entries</h2><div class="sub">Entries of this amount or more are highlighted in lists.</div><div class="field"><input id="bigAt" inputmode="numeric" value="${bigAt()}"></div></div>`;
@@ -788,7 +841,7 @@ function renderSettings(){
   h+=`<div class="card"><h2>Your data</h2><div class="sub">Everything is stored only on this device. ${lb?'Last backup: '+nice(lb)+' '+pd(lb).getFullYear()+'.':'<b class="bad">No backup saved yet.</b>'}</div>${has('pickBackupFolder')?`<div class="autobk"><b>Automatic backup</b><div class="sub">${ai.folder?'Saves into “'+esc(ai.folder)+'” whenever you leave the app after a change. '+(ai.ok==='0'?'<b class="bad">The last attempt failed. Choose the folder again.</b>':ai.at?'Last saved '+shortDate(ai.at)+'.':'Not saved yet.')+' The ten newest files are kept.':'Choose a folder and Paisa saves a backup there by itself whenever you leave the app after a change. Pick one that syncs to the cloud, or that you copy off the phone.'}</div><button class="btn ${ai.folder?'ghost':''}" data-act="bkfolder">${ai.folder?'Change folder':'Choose backup folder'}</button>${ai.folder?'<button class="btn ghost" data-act="bkoff">Turn off automatic backup</button>':''}</div>`:''}<button class="btn ${has('pickBackupFolder')&&ai.folder?'ghost':''}" data-act="backup">Save a backup now</button><button class="btn ghost" data-act="restore">Restore a backup</button><button class="btn ghost" data-act="snaps">Restore points</button><button class="btn ghost" data-act="xlsx">Export to Excel</button><button class="btn ghost" data-act="import">Import from Hysab Kytab</button><button class="btn danger" data-act="wipe">Wipe all data</button></div>`;
   h+=`<div class="sub" style="text-align:center;margin:14px">Paisa ${APPV} · ${S.entries.length} entries</div>`;
   return h}
-const APPV='1.7';
+const APPV='1.8';
 
 /* ---------- render ---------- */
 function render(kind){
@@ -832,23 +885,26 @@ function setDefaults(){const m=S.mem;const open=S.accounts.filter(a=>!a.closed);
   if(F.type==='transfer'){F.acc=ok(m.trFrom)?m.trFrom:(open[0]||{}).id;F.toAcc=ok(m.trTo)&&m.trTo!==F.acc?m.trTo:(open.find(a=>a.id!==F.acc)||{}).id||null;F.cat=null}
   else{const k=F.type==='expense'?'expAcc':'incAcc';F.acc=ok(m[k])?m[k]:(open[0]||{}).id;const ck=F.type==='expense'?'expCat':'incCat';const c=cat(m[ck]);F.cat=c&&!c.hidden&&c.type===F.type?c.id:null;
     if(F.type==='income'&&!F.cat){const s=S.categories.find(x=>x.type==='income'&&/^salary$/i.test(x.name));if(s)F.cat=s.id}}
-  F.payout=false;F.startsMonth=F.type==='income'&&F.cat&&/^salary$/i.test(catName(F.cat))}
+  F.payout=false;F.startsMonth=F.type==='income'&&F.cat&&/^salary$/i.test(catName(F.cat));
+  if(F.type==='card'){const c=cat(m.cardCat);F.cat=c&&!c.hidden?c.id:null;F.acc=null;F.startsMonth=false}}
 function drawEntry(){sameSheet=!!$('#sheet .sheetwrap:not(.out)')&&!!$('#amt');
   const open=S.accounts.filter(a=>!a.closed||a.id===F.acc||a.id===F.toAcc);
-  const u=usage(F.type);const cats=S.categories.filter(c=>c.type===F.type&&(!c.hidden||c.id===F.cat)).map((c,i)=>({c,i})).sort((a,b)=>(u[b.c.id]||0)-(u[a.c.id]||0)||a.i-b.i).map(x=>x.c);
+  const isCard=F.type==='card';const u=isCard?cardUsage():usage(F.type);const cats=S.categories.filter(c=>c.type===(isCard?'expense':F.type)&&(!c.hidden||c.id===F.cat)).map((c,i)=>({c,i})).sort((a,b)=>(u[b.c.id]||0)-(u[a.c.id]||0)||a.i-b.i).map(x=>x.c);
   const accPick=(key,ex)=>`<div class="pick">${open.filter(a=>a.id!==ex).map(a=>`<button data-act="f" data-k="${key}" data-v="${a.id}" class="${F[key]===a.id?'on':''}">${esc(a.name)}</button>`).join('')}</div>`;
-  let h=sheetHd(F.edit?'Edit entry':'Add entry');
-  h+=`<div class="seg">${[['expense','Expense'],['income','Income'],['transfer','Transfer']].map(([t,l])=>`<button data-act="ftype" data-v="${t}" class="${F.type===t?'on':''}">${l}</button>`).join('')}</div>`;
+  let h=sheetHd(F.edit?(isCard?'Edit card purchase':'Edit entry'):'Add entry');
+  if(!(F.edit&&isCard))h+=`<div class="seg">${[['expense','Expense'],['income','Income'],['transfer','Transfer'],...(F.edit?[]:[['card','Card']])].map(([t,l])=>`<button data-act="ftype" data-v="${t}" class="${F.type===t?'on':''}">${l}</button>`).join('')}</div>`;
+  if(isCard&&!(S.card&&S.card.stmtDay)){h+=`<div class="note" style="margin-top:12px">Itemise what you put on your credit card. These purchases are kept apart from your main entries and balances, and compared with the bill when it arrives.</div><button class="btn" data-act="cardset">Set up your card</button>`;openSheet(h);return}
   if(!F.edit&&F.type==='expense'){FAV=favourites();if(FAV.length)h+=`<div class="lbl">Quick add, one tap</div><div class="pick fav">${FAV.map((f,i)=>`<button data-act="fav" data-id="${i}"><span class="ci" style="color:var(--s${catLook(cat(f.cat)).col})">${gsvg(catLook(cat(f.cat)).icon)}</span>${esc(f.note)} <span class="sub num">${fnum(f.amount)}</span></button>`).join('')}</div>`}
   if(!F.edit&&F.type==='income')h+=`<button class="btn ghost" data-act="payday" style="margin-top:10px">Payday routine: salary and transfers</button>`;
   h+=`<div class="amt"><span>Rs</span><input id="amt" inputmode="decimal" placeholder="0" value="${esc(F.amount)}" autocomplete="off"><div class="ops">${['+','−','×','÷'].map(o=>`<button data-act="op" data-v="${o}" aria-label="${o}">${o}</button>`).join('')}</div></div><div class="sub" id="calc" style="margin:-4px 4px 0;min-height:18px"></div>`;
   if(F.type==='transfer'){h+=`<div class="lbl">From</div>${accPick('acc')}<div class="lbl">To</div>${accPick('toAcc',F.acc)}`}
-  else{h+=`<div class="lbl">Category</div><div class="pick">${cats.map(c=>`<button data-act="f" data-k="cat" data-v="${c.id}" class="${F.cat===c.id?'on':''}"><span class="ci" style="color:var(--s${catLook(c).col})">${gsvg(catLook(c).icon)}</span>${esc(c.name)}</button>`).join('')}</div><div class="lbl">${F.type==='expense'?'Paid from':'Received in'}</div>${accPick('acc')}`}
+  else{h+=`<div class="lbl">Category</div><div class="pick">${cats.map(c=>`<button data-act="f" data-k="cat" data-v="${c.id}" class="${F.cat===c.id?'on':''}"><span class="ci" style="color:var(--s${catLook(c).col})">${gsvg(catLook(c).icon)}</span>${esc(c.name)}</button>`).join('')}</div>${isCard?cardHint():`<div class="lbl">${F.type==='expense'?'Paid from':'Received in'}</div>${accPick('acc')}`}`}
   h+=`<div class="field"><input id="note" placeholder="Note (optional)" value="${esc(F.note||'')}" autocomplete="off"><input id="date" type="date" value="${F.date}" style="flex:0 0 150px"></div><div class="pick" id="sugg" style="margin-top:8px"></div>`;
   if(F.type==='expense'){h+=`<button class="sw payout ${F.payout?'on':''}" data-act="fsw" data-k="payout"><span class="grow"><b>From payout</b><span>Paid from committee payout or other extra money. Not counted against salary.</span></span><span class="tog"></span></button><button class="sw ${F.refund?'on':''}" data-act="fsw" data-k="refund"><span class="grow"><b>Refund</b><span>Money coming back for an earlier expense. It lowers this category’s spending.</span></span><span class="tog"></span></button>`;
     if(!F.edit){const ecats=S.categories.filter(c=>c.type==='expense'&&!c.hidden&&c.id!==F.cat);const sp=F.splits||[];
       if(sp.length)h+=`<div class="lbl">Split off into other categories</div>`+sp.map((x,k)=>`<div class="field" style="margin-top:${k?8:0}px"><select id="spC${k}" class="inp">${ecats.map(c=>`<option value="${c.id}" ${x.cat===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select><input id="spA${k}" inputmode="decimal" value="${esc(x.amount)}" placeholder="Amount" style="flex:0 0 110px"><button class="x" data-act="sprm" data-id="${k}" aria-label="Remove">✕</button></div>`).join('')+`<div class="sub" style="margin:6px 2px">The amount at the top is the whole payment. Whatever is not split off stays under the category picked above.</div>`;
       h+=`<button class="btn ghost" data-act="spadd">${sp.length?'Add another split':'Split across categories'}</button>`}}
+  if(isCard)h+=`<button class="sw ${F.refund?'on':''}" data-act="fsw" data-k="refund"><span class="grow"><b>Refund</b><span>Money coming back onto the card. It lowers the statement total.</span></span><span class="tog"></span></button>`;
   if(F.type==='income'){const l=labelFor(F.date||today());h+=`<button class="sw ${F.startsMonth?'on':''}" data-act="fsw" data-k="startsMonth"><span class="grow"><b>Starts new month</b><span>${F.startsMonth?'This is the salary for <b>'+esc(l.label)+'</b>. That month begins on this date.':'Turn on for salary. Leave off for payouts and other income.'}</span></span><span class="tog"></span></button>`}
   h+=`<button class="btn" data-act="fsave">${F.edit?'Save changes':'Save'}</button>${F.edit?'<button class="btn danger" data-act="fdel">Delete entry</button>':''}`;
   openSheet(h);showCalc();if(!F.edit&&!F.amount)setTimeout(()=>{const a=$('#amt');a&&a.focus()},50)}
@@ -856,6 +912,7 @@ function calc(s){s=String(s).replace(/,/g,'').replace(/−/g,'-').replace(/×/g,
 function showCalc(){const el=$('#calc');if(!el)return;const s=F.amount;const v=calc(s);el.textContent=/[+\-−×÷*/]/.test(String(s).slice(1))&&!isNaN(v)?'= '+fmt(v):''}
 function syncF(){const a=$('#amt'),n=$('#note'),d=$('#date');if(a)F.amount=a.value;if(n)F.note=n.value;if(d&&d.value)F.date=d.value;if(F.splits)F.splits.forEach((sp,k)=>{const c=$('#spC'+k),x=$('#spA'+k);if(c)sp.cat=c.value;if(x)sp.amount=x.value})}
 function saveEntry(){
+  if(F.type==='card')return saveCardItem();
   syncF();const amt=calc(F.amount);
   if(!(amt>0))return toast('Enter an amount.');
   if(F.type==='transfer'){if(!F.acc||!F.toAcc||F.acc===F.toAcc)return toast('Pick two different accounts.')}
@@ -914,7 +971,7 @@ function doRestore(){pickFile('.json,application/json',u8=>{try{const d=JSON.par
   if(S.entries.length){pending=go;confirmSheet('Replace current data?',`This device has ${S.entries.length} entries. Restoring replaces them with the ${d.entries.length} in the backup.`,'pend','Replace')}else go()}catch(e){toast('That is not a Paisa backup file.')}})}
 let pending=null;
 function doXlsx(from,to){const rows=sortE(S.entries.filter(e=>(!from||e.date>=from)&&(!to||e.date<=to))).reverse().map(e=>({Date:e.date,Type:e.type,Amount:e.amount,Category:e.type==='transfer'?'':catName(e.cat),Account:accName(e.acc),'To account':e.toAcc?accName(e.toAcc):'',Note:e.note||'','From payout':e.payout?'yes':'','Starts month':e.startsMonth?'yes':''}));
-  const b=balances();const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Entries');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.accounts.map(a=>({Account:a.name,Opening:+a.opening||0,Balance:b[a.id]||0,Closed:a.closed?'yes':''}))),'Accounts');
+  const b=balances();const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Entries');if((S.cardTx||[]).length)XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sortE((S.cardTx||[]).filter(e=>(!from||e.date>=from)&&(!to||e.date<=to))).reverse().map(e=>({Date:e.date,Amount:e.amount,Category:catName(e.cat),Note:e.note||'',Statement:S.card?stmtClose(e.date):''}))),'Card');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.accounts.map(a=>({Account:a.name,Opening:+a.opening||0,Balance:b[a.id]||0,Closed:a.closed?'yes':''}))),'Accounts');
   saveFile('paisa-'+(from||to?(from||'start')+'-to-'+(to||today()):today())+'.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',new Uint8Array(XLSX.write(wb,{type:'array',bookType:'xlsx'})))}
 
 /* Hysab Kytab import */
@@ -986,7 +1043,7 @@ document.addEventListener('click',ev=>{
     case 'fsw':{syncF();const k=el.dataset.k;F[k]=!F[k];el.classList.toggle('on',F[k]);if(k==='startsMonth'){const l=labelFor(F.date||today());el.querySelector('.grow span').innerHTML=F[k]?'This is the salary for <b>'+esc(l.label)+'</b>. That month begins on this date.':'Turn on for salary. Leave off for payouts and other income.'}break}
     case 'op':{const i=$('#amt');i.value+=el.dataset.v;F.amount=i.value;i.focus();showCalc();break}
     case 'fsave':saveEntry();break;
-    case 'fdel':{const gone=S.entries.find(e=>e.id===F.id);S.entries=S.entries.filter(e=>e.id!==F.id);save();closeSheet();render();toast('Deleted',gone&&{label:'Undo',fn:()=>{S.entries.push(gone);save();render()}});break}
+    case 'fdel':{if(F.type==='card'){const g=(S.cardTx||[]).find(x=>x.id===F.cardId);S.cardTx=(S.cardTx||[]).filter(x=>x.id!==F.cardId);const back=F.back;save();render();if(back){F=null;drawCardFresh()}else closeSheet();toast('Deleted',g&&{label:'Undo',fn:()=>{S.cardTx.push(g);save();render();if($('#cdBank'))drawCardKeep()}});break}const gone=S.entries.find(e=>e.id===F.id);S.entries=S.entries.filter(e=>e.id!==F.id);save();closeSheet();render();toast('Deleted',gone&&{label:'Undo',fn:()=>{S.entries.push(gone);save();render()}});break}
     case 'acctview':openAcctView(id);break;
     case 'catview':openCatView(id);break;
     case 'acctedit':openAcct(id);break;
@@ -1021,8 +1078,15 @@ document.addEventListener('click',ev=>{
     case 'exgo':{const f=$('#exFrom').value,t=$('#exTo').value;closeSheet();doXlsx(f,t);break}
     case 'toastact':{const f=toastFn;toastFn=null;clearTimeout(toast.t);$('#toast').innerHTML='';if(f)f();break}
     case 'fav':quickLog(id);break;
-    case 'sugg':{const x=SUG[+id];if(!x||!F)break;syncF();F.note=x.note;const c0=cat(x.cat);if(c0&&c0.type===F.type)F.cat=x.cat;const a0=acc(x.acc);if(a0&&!a0.closed)F.acc=x.acc;if(!(calc(F.amount)>0))F.amount=String(x.amount);drawEntry();break}
+    case 'sugg':{const x=SUG[+id];if(!x||!F)break;syncF();F.note=x.note;const c0=cat(x.cat);if(c0&&c0.type===(F.type==='card'?'expense':F.type))F.cat=x.cat;const a0=acc(x.acc);if(a0&&!a0.closed&&F.type!=='card')F.acc=x.acc;if(!(calc(F.amount)>0))F.amount=String(x.amount);drawEntry();break}
     case 'payday':openPayday();break;
+    case 'cardopen':openCard();break;
+    case 'cardnav':V.cardC=+el.dataset.d<0?stmtPrev(V.cardC):stmtNext(V.cardC);sameSheet=false;drawCardFresh();break;
+    case 'cardadd':openCardItem(null,true);break;
+    case 'cardedit':openCardItem(id,true);break;
+    case 'cardset':openCardSetup();break;
+    case 'cardsave':{const sd=Math.round(calc($('#ckStmt').value)),dd=Math.round(calc($('#ckDue').value));if(!(sd>=1&&sd<=31)||!(dd>=1&&dd<=31))return toast('Enter the statement day and the due day, each from 1 to 31.');S.card={name:$('#ckName').value.trim(),stmtDay:sd,dueDay:dd};save();render();if(F&&F.type==='card'){sameSheet=false;drawEntry()}else{V.cardC=null;sameSheet=false;openCard()}break}
+    case 'cardoff':delete S.card;save();closeSheet();render();toast('Card tracking stopped. Your itemised purchases are kept.');break;
     case 'pradd':{prSync();const o=S.accounts.filter(a=>!a.closed&&a.id!==PR.acc);if(o.length)PR.transfers.push({to:(o.find(a=>!PR.transfers.some(t=>t.to===a.id))||o[0]).id,amount:''});drawPayday();break}
     case 'prrm':prSync();PR.transfers.splice(+id,1);drawPayday();break;
     case 'prsave':savePayday();break;
@@ -1055,7 +1119,8 @@ document.addEventListener('input',ev=>{const t=ev.target;
 document.addEventListener('change',ev=>{const t=ev.target;
   if(t.id==='fAcc'){V.fAcc=t.value;render()}
   else if(t.id==='fCat'){V.fCat=t.value;render()}
-  else if(t.id==='date'&&F){syncF();if(F.type==='income')drawEntry()}
+  else if(t.id==='date'&&F){syncF();if(F.type==='income'||F.type==='card')drawEntry()}
+  else if(t.id==='cdBank'){const v=calc(t.value);S.cardStm=S.cardStm||{};if(v>0)S.cardStm[V.cardC]={bank:v};else delete S.cardStm[V.cardC];save();drawCardKeep()}
   else if(t.id==='bigAt'){const v=calc(t.value);S.settings.bigAt=v>0?v:50000;save();render()}
   else if(t.id==='dFrom'){V.from=t.value;render()}
   else if(t.id==='dTo'){V.to=t.value;render()}
