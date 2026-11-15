@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shown when the app icon is long-pressed. targetPackage must match applicationId. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="add_expense"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_minus"
+        android:shortcutShortLabel="@string/shortcut_expense">
+        <intent
+            android:action="app.paisa.tracker.ADD_EXPENSE"
+            android:targetPackage="app.paisa.tracker"
+            android:targetClass="app.paisa.tracker.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="add_income"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_plus"
+        android:shortcutShortLabel="@string/shortcut_income">
+        <intent
+            android:action="app.paisa.tracker.ADD_INCOME"
+            android:targetPackage="app.paisa.tracker"
+            android:targetClass="app.paisa.tracker.MainActivity" />
+    </shortcut>
+</shortcuts>
