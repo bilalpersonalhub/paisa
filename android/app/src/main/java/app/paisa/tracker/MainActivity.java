@@ -2,9 +2,14 @@ package app.paisa.tracker;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -117,6 +122,33 @@ public class MainActivity extends Activity {
 
     /** Called from the web app to save a backup or export through the system file picker. */
     private class Bridge {
+        /** Lets the app's chosen look colour the system bars. */
+        @JavascriptInterface
+        public void setBars(final String status, final String nav, final boolean darkStatusIcons,
+                            final boolean darkNavIcons) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Window w = getWindow();
+                        w.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+                        w.setStatusBarColor(Color.parseColor(status));
+                        w.setNavigationBarColor(Color.parseColor(nav));
+                        int flags = 0;
+                        if (darkStatusIcons) {
+                            flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                        }
+                        if (darkNavIcons && Build.VERSION.SDK_INT >= 26) {
+                            flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                        }
+                        w.getDecorView().setSystemUiVisibility(flags);
+                    } catch (Exception ignored) {
+                        // A bad colour string must never crash the app.
+                    }
+                }
+            });
+        }
+
         @JavascriptInterface
         public void saveFile(final String name, final String mimeType, String base64) {
             final byte[] data = Base64.decode(base64, Base64.DEFAULT);
