@@ -203,6 +203,7 @@ select.inp{appearance:auto}
 .wk i{display:block;width:100%;max-width:28px;border-radius:4px 4px 0 0;background:var(--acc)}.wk i.we{opacity:.5}
 .wv,.wl{font-size:11px;color:var(--mute);font-variant-numeric:tabular-nums;min-height:14px}
 .line{display:block;width:100%;height:auto;margin:8px 0 2px}.line .ln{fill:none;stroke:var(--acc);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.line .ln2{fill:none;stroke:var(--mute);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;opacity:.55}
 .line .ax{stroke:var(--line)}.line .pt{fill:var(--acc);stroke:var(--card);stroke-width:2}.line .lt{font-size:10px;fill:var(--mute)}
 .spark{width:84px;height:28px;flex:none}.spark path{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}.spark circle{fill:var(--c)}
 .trow{padding:7px 0}.trow+.trow{border-top:1px solid var(--line)}
@@ -443,6 +444,7 @@ function renderHome(){
   if(!S.entries.length&&!S.settings.started)h+=`<div class="card"><h2>Welcome</h2><p style="margin:0 0 4px">Bring your history over, or start empty.</p><button class="btn" data-act="import">Import from Hysab Kytab</button><button class="btn ghost" data-act="restore">Restore a Paisa backup</button><button class="btn ghost" data-act="startempty">Start empty</button></div>`;
   if(isCur&&!c.cal&&daysBetween(c.start,today())>35)h+=`<div class="note p">This month has run ${daysBetween(c.start,today())} days. Log your salary with “starts new month” on to begin the next one.</div>`;
   h+=backupNudge();
+  h+=reviewNudge();
   h+=meterCard(c,st,isCur);
   h+=dueCard();
   h+=homeCard();
@@ -609,12 +611,37 @@ function rPatterns(){
   return h}
 
 /* ---------- Long view ---------- */
-function lineChart(pts){ // pts: [{d,v}]
-  const W=320,H=132,L=6,Rr=6,T=18,B=30;const vs=pts.map(p=>p.v);let lo=Math.min(...vs),hi=Math.max(...vs);if(hi===lo){hi+=1;lo-=1}
+function lineChart(pts,pts2,label){ // pts: [{d,v}], pts2: same dates, drawn quieter
+  const W=320,H=132,L=6,Rr=6,T=18,B=30;const vs=pts.map(p=>p.v),v2=pts2?pts2.map(p=>p.v):[];let lo=Math.min(...vs,...v2),hi=Math.max(...vs,...v2);if(hi===lo){hi+=1;lo-=1}
   const X=k=>L+(pts.length>1?k/(pts.length-1):0.5)*(W-L-Rr),Y=v=>T+(1-(v-lo)/(hi-lo))*(H-T-B);
-  const path=pts.map((p,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(p.v).toFixed(1)).join('');const lastP=pts[pts.length-1];
+  const mk=a=>a.map((p,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(p.v).toFixed(1)).join('');const lastP=pts[pts.length-1];
   const hiK=vs.indexOf(Math.max(...vs)),loK=vs.indexOf(Math.min(...vs));
-  return `<svg class="line" viewBox="0 0 ${W} ${H}" role="img" aria-label="Total balance over time"><line x1="${L}" x2="${W-Rr}" y1="${H-B}" y2="${H-B}" class="ax"/><path d="${path}" class="ln"/><circle cx="${X(pts.length-1)}" cy="${Y(lastP.v)}" r="4" class="pt"/><text x="${L}" y="${H-4}" class="lt">${shortDate(pts[0].d)}</text><text x="${W-Rr}" y="${H-4}" class="lt" text-anchor="end">${shortDate(lastP.d)}</text><text x="${Math.min(W-34,Math.max(34,X(hiK)))}" y="${Y(vs[hiK])-7}" class="lt" text-anchor="middle">high ${fk(vs[hiK])}</text>${hiK!==loK?`<text x="${Math.min(W-34,Math.max(34,X(loK)))}" y="${Y(vs[loK])+13}" class="lt" text-anchor="middle">low ${fk(vs[loK])}</text>`:''}</svg>`}
+  return `<svg class="line" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label||'Total balance over time')}"><line x1="${L}" x2="${W-Rr}" y1="${H-B}" y2="${H-B}" class="ax"/>${pts2?`<path d="${mk(pts2)}" class="ln2"/>`:''}<path d="${mk(pts)}" class="ln"/><circle cx="${X(pts.length-1)}" cy="${Y(lastP.v)}" r="4" class="pt"/><text x="${L}" y="${H-4}" class="lt">${shortDate(pts[0].d)}</text><text x="${W-Rr}" y="${H-4}" class="lt" text-anchor="end">${shortDate(lastP.d)}</text><text x="${Math.min(W-34,Math.max(34,X(hiK)))}" y="${Y(vs[hiK])-7}" class="lt" text-anchor="middle">high ${fk(vs[hiK])}</text>${hiK!==loK?`<text x="${Math.min(W-34,Math.max(34,X(loK)))}" y="${Y(vs[loK])+13}" class="lt" text-anchor="middle">low ${fk(vs[loK])}</text>`:''}</svg>`}
+/* ---------- net worth: accounts, less the card, adjusted for committees ---------- */
+function cardOwedAt(d){if(!S.card)return 0;let last=null;for(const e of S.entries)if(isCardBill(e)&&e.date<=d&&(!last||e.date>last))last=e.date;return sum((S.cardTx||[]).filter(x=>x.date<=d&&(!last||x.date>last)),x=>x.amount)}
+function committeeAt(key){let v=0;for(const m of cmAll()){if(!m.months||!m.start||!m.parts.length)continue;const paid=Math.max(0,Math.min(m.months,keyDiff(key,m.start)+1));v+=paid*sum(m.parts,p=>p.amt)-sum(m.parts.filter(p=>p.payoutMonth&&p.payoutMonth<=key),p=>cmPay(p,m))}return v} // positive: paid in more than received
+function review(cs,i){const c=cs[i],st=cycStats(c);const prev=i>0?cs[i-1]:null;const pst=prev?cycStats(prev):null;const closed=!inCyc(c,today());const hasPrev=closed&&!!(pst&&pst.exp.length);
+  const own=st.exp.filter(e=>!e.payout);const ctNow={},ctPrev={};for(const e of own)ctNow[e.cat]=(ctNow[e.cat]||0)+e.amount;if(hasPrev)for(const e of pst.exp.filter(e=>!e.payout))ctPrev[e.cat]=(ctPrev[e.cat]||0)+e.amount;
+  const flexDay={};for(const e of own.filter(isFlex))flexDay[e.date]=1;const days=cycDays(c);const zero=days.filter(d=>!flexDay[d]).length;
+  const good=[],bad=[];
+  if(st.salary){if(st.left>=0)good.push(`You kept <b>${fmt(st.left)}</b> of your salary, ${Math.round(st.left/st.salary*100)}% of it.`);else bad.push(`You spent <b>${fmt(-st.left)}</b> more than your salary.`)}
+  if(hasPrev&&pst.salary&&st.salary){const d=st.spent-pst.spent;if(d<=-1000)good.push(`Spending from salary fell by <b>${fmt(-d)}</b> against ${esc(prev.label)}.`);else if(d>=1000)bad.push(`Spending from salary rose by <b>${fmt(d)}</b> against ${esc(prev.label)}.`)}
+  const moves=hasPrev?Object.keys({...ctNow,...ctPrev}).map(k=>({k,d:(ctNow[k]||0)-(ctPrev[k]||0),now:ctNow[k]||0,was:ctPrev[k]||0})).filter(x=>Math.abs(x.d)>=1000):[];
+  moves.filter(x=>x.d<0).sort((a,b)=>a.d-b.d).slice(0,2).forEach(x=>good.push(`<b>${esc(catName(x.k))}</b> came down by ${fmt(-x.d)}, to ${fmt(x.now)}.`));
+  moves.filter(x=>x.d>0).sort((a,b)=>b.d-a.d).slice(0,2).forEach(x=>bad.push(`<b>${esc(catName(x.k))}</b> went up by ${fmt(x.d)}, to ${fmt(x.now)}.`));
+  if(zero>=3)good.push(`<b>${zero}</b> day${zero===1?'':'s'} had no flexible spending.`);
+  const big=own.slice().sort((a,b)=>b.amount-a.amount)[0];if(big&&st.spent&&big.amount/st.spent>=0.2)bad.push(`<b>${esc(big.note||catName(big.cat))}</b> alone was ${fmt(big.amount)}, ${Math.round(big.amount/st.spent*100)}% of spending from salary.`);
+  const sm=own.filter(e=>e.amount>0&&e.amount<smallAt());const smT=sum(sm,e=>e.amount);if(st.spent&&smT/st.spent>=0.25)bad.push(`Small spends under ${fmt(smallAt())} added up to <b>${fmt(smT)}</b> across ${sm.length} entries.`);
+  // the one change: the flexible category that grew most, else the largest one
+  const flexCats=Object.entries(ctNow).filter(([k])=>!isFixed(cat(k))).map(([k,v])=>({k,v,d:v-(ctPrev[k]||0)}));let pick=null;
+  if(hasPrev)pick=flexCats.filter(x=>x.d>=1000).sort((a,b)=>b.d-a.d)[0]||null;if(!pick)pick=flexCats.sort((a,b)=>b.v-a.v)[0]||null;
+  const change=pick?(hasPrev&&pick.d>=1000?`Bring <b>${esc(catName(pick.k))}</b> back to last month’s level and you keep ${fmt(pick.d)} more next month.`:`<b>${esc(catName(pick.k))}</b> was your largest flexible cost at ${fmt(pick.v)}. Trimming a quarter of it keeps ${fmt(pick.v/4)} a month.`):'';
+  return {c,st,good:good.slice(0,3),bad:bad.slice(0,3),change,hasPrev}}
+function reviewHtml(cs,i){const r=review(cs,i);if(!r.st.es.length)return needMore('Nothing logged in '+esc(r.c.label)+'.');const done=!inCyc(r.c,today());
+  return `${done?'':'<div class="sub" style="margin-bottom:6px">This month is still running, so these will move.</div>'}<div class="lbl" style="margin-top:4px">What went well</div>${r.good.map(x=>`<div class="note">${x}</div>`).join('')||'<div class="sub">Nothing stands out yet.</div>'}<div class="lbl">What went over</div>${r.bad.map(x=>`<div class="note w">${x}</div>`).join('')||'<div class="sub">Nothing went over.</div>'}${r.change?`<div class="lbl">One thing to change</div><div class="note p">${r.change}</div>`:''}${r.hasPrev?'':`<div class="sub" style="padding-top:6px">${done?'Comparisons with the month before appear once there is one.':'Comparisons with the month before are made once this month closes, so a part month is not judged against a whole one.'}</div>`}<div class="lbl">The numbers</div>${wrapStats(r.st.es,r.c.label)}`}
+function openReview(key){const cs=cycles();const i=cs.findIndex(x=>x.key===key);if(i<0)return;S.reviewSeen=key;save();render();openSheet(sheetHd(esc(cs[i].label)+' review')+reviewHtml(cs,i))}
+function reviewNudge(){const cs=cycles();const i=cs.findIndex(x=>inCyc(x,today()));if(i<1)return '';const prev=cs[i-1];if(S.reviewSeen===prev.key||!cycStats(prev).exp.length)return '';
+  return `<button class="card" data-act="review" data-id="${prev.key}"><h2>${esc(prev.label)} review ›</h2><div class="sub">${esc(prev.label)} has closed. See what went well, what went over, and one thing to change.</div></button>`}
 function spark(vals,col){const W=72,H=24;const hi=Math.max(...vals,1),lo=Math.min(...vals,0);const X=k=>2+k/(vals.length-1)*(W-4),Y=v=>H-3-(v-lo)/(hi-lo||1)*(H-6);
   return `<svg class="spark" viewBox="0 0 ${W} ${H}" style="--c:var(--s${col})"><path d="${vals.map((v,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(v).toFixed(1)).join('')}"/><circle cx="${X(vals.length-1)}" cy="${Y(vals[vals.length-1])}" r="2.5"/></svg>`}
 function wrapStats(es,label){
@@ -628,13 +655,14 @@ function wrapStats(es,label){
 function rLong(){
   const {cs,i,c}=curCycles();if(!S.entries.length)return '<div class="empty">Nothing logged yet.</div>';
   let h='';
-  // total balance over time
+  // net worth over time
   const dates=S.entries.map(e=>e.date).sort();const d0=dates[0];const open=sum(S.accounts,a=>+a.opening||0);const net={};
   for(const e of S.entries){if(e.type==='income')net[e.date]=(net[e.date]||0)+e.amount;else if(e.type==='expense')net[e.date]=(net[e.date]||0)-e.amount}
-  let pts=[],run=open;for(let d=d0;d<=today();d=addDays(d,1)){run+=net[d]||0;pts.push({d,v:run})}
-  if(pts.length>150){const step=Math.ceil(pts.length/120);pts=pts.filter((p,k)=>k%step===0||k===pts.length-1)}
-  const ch=pts.length>1?pts[pts.length-1].v-pts[0].v:0;
-  h+=`<div class="card"><h2>What you have, over time</h2><div class="row"><div class="big num grow" style="font-size:24px">${fmt(pts[pts.length-1].v)}</div>${pts.length>1?`<span class="sub num">${ch>=0?'up':'down'} ${fmt(Math.abs(ch))} since ${shortDate(d0)}</span>`:''}</div>${pts.length>1?lineChart(pts):needMore('A line appears after a second day of entries.')}<div class="sub">All accounts together, at the end of each day.</div></div>`;
+  const extra=!!(S.card&&(S.cardTx||[]).length)||cmAll().some(m=>m.months&&m.start&&m.parts.length);
+  let bal=[],nw=[],run=open;for(let d=d0;d<=today();d=addDays(d,1)){run+=net[d]||0;bal.push({d,v:run});if(extra){const cy=cs.find(x=>inCyc(x,d));nw.push({d,v:run-cardOwedAt(d)+committeeAt(cy?cy.key:labelFor(d).key)})}}
+  if(bal.length>150){const step=Math.ceil(bal.length/120);const keep=(p,k,a)=>k%step===0||k===a.length-1;bal=bal.filter(keep);nw=nw.filter(keep)}
+  const main=extra?nw:bal;const ch=main.length>1?main[main.length-1].v-main[0].v:0;const nowBal=bal[bal.length-1].v,owed=cardOwedAt(today()),cmNow=committeeAt((cs.find(x=>inCyc(x,today()))||cs[cs.length-1]).key);
+  h+=`<div class="card"><h2>${extra?'Net worth':'What you have, over time'}</h2><div class="row"><div class="big num grow" style="font-size:24px">${fmt(main[main.length-1].v)}</div>${main.length>1?`<span class="sub num">${ch>=0?'up':'down'} ${fmt(Math.abs(ch))} since ${shortDate(d0)}</span>`:''}</div>${main.length>1?lineChart(main,extra?bal:null,extra?'Net worth over time':''):needMore('A line appears after a second day of entries.')}${extra?`<div class="legend" style="margin:2px 0 8px"><span><i style="background:var(--acc)"></i>Net worth</span><span><i></i>In your accounts</span></div><div class="kv"><span>In your accounts</span><b class="num">${fmt(nowBal)}</b></div>${S.card?`<div class="kv"><span>Owed on the card, as itemised</span><b class="num">−${fmt(owed)}</b></div>`:''}${cmNow?`<div class="kv"><span>${cmNow>0?'Paid into committees, not yet received':'Received from committees, still to pay in'}</span><b class="num">${cmNow>0?'+':'−'}${fmt(Math.abs(cmNow))}</b></div>`:''}<div class="kv"><span>Net worth</span><b class="num">${fmt(main[main.length-1].v)}</b></div><div class="sub" style="padding-top:6px">The card figure is what you have itemised since your last payment. The committee figure assumes every instalment so far was paid on time.</div>`:'<div class="sub">All accounts together, at the end of each day.</div>'}</div>`;
   // months compare
   const all=cs.map(x=>({c:x,st:cycStats(x)})).filter(x=>x.st.es.length);const shown=all.slice(-8);
   const mx=Math.max(1,...shown.map(x=>Math.max(x.st.spent,x.st.salary)));
@@ -652,7 +680,7 @@ function rLong(){
   // wrap-up
   const w=V.wrap||'month';const yr=c.key.slice(0,4);
   const es=w==='month'?S.entries.filter(e=>inCyc(c,e.date)):S.entries.filter(e=>{const x=cs.find(y=>inCyc(y,e.date));return x&&x.key.slice(0,4)===yr});
-  h+=`<div class="card"><h2>Wrap-up</h2><div class="seg" style="margin-bottom:8px"><button data-act="wrap" data-id="month" class="${w==='month'?'on':''}">${esc(c.label)}</button><button data-act="wrap" data-id="year" class="${w==='year'?'on':''}">${yr}</button></div>${wrapStats(es,w==='month'?c.label:yr)}</div>`;
+  h+=`<div class="card"><h2>Review</h2><div class="seg" style="margin-bottom:8px"><button data-act="wrap" data-id="month" class="${w==='month'?'on':''}">${esc(c.label)}</button><button data-act="wrap" data-id="year" class="${w==='year'?'on':''}">${yr}</button></div>${w==='month'?reviewHtml(cs,i):wrapStats(es,yr)}</div>`;
   return h}
 
 /* ---------- Tools ---------- */
@@ -852,7 +880,7 @@ function renderSettings(){
   h+=`<div class="card"><h2>Your data</h2><div class="sub">Everything is stored only on this device. ${lb?'Last backup: '+nice(lb)+' '+pd(lb).getFullYear()+'.':'<b class="bad">No backup saved yet.</b>'}</div>${has('pickBackupFolder')?`<div class="autobk"><b>Automatic backup</b><div class="sub">${ai.folder?'Saves into “'+esc(ai.folder)+'” whenever you leave the app after a change. '+(ai.ok==='0'?'<b class="bad">The last attempt failed. Choose the folder again.</b>':ai.at?'Last saved '+shortDate(ai.at)+'.':'Not saved yet.')+' The ten newest files are kept.':'Choose a folder and Paisa saves a backup there by itself whenever you leave the app after a change. Pick one that syncs to the cloud, or that you copy off the phone.'}</div><button class="btn ${ai.folder?'ghost':''}" data-act="bkfolder">${ai.folder?'Change folder':'Choose backup folder'}</button>${ai.folder?'<button class="btn ghost" data-act="bkoff">Turn off automatic backup</button>':''}</div>`:''}<button class="btn ${has('pickBackupFolder')&&ai.folder?'ghost':''}" data-act="backup">Save a backup now</button><button class="btn ghost" data-act="restore">Restore a backup</button><button class="btn ghost" data-act="snaps">Restore points</button><button class="btn ghost" data-act="xlsx">Export to Excel</button><button class="btn ghost" data-act="import">Import from Hysab Kytab</button><button class="btn danger" data-act="wipe">Wipe all data</button></div>`;
   h+=`<div class="sub" style="text-align:center;margin:14px">Paisa ${APPV} · ${S.entries.length} entries</div>`;
   return h}
-const APPV='1.9';
+const APPV='1.10';
 
 /* ---------- render ---------- */
 function render(kind){
@@ -1092,6 +1120,7 @@ document.addEventListener('click',ev=>{
     case 'sugg':{const x=SUG[+id];if(!x||!F)break;syncF();F.note=x.note;const c0=cat(x.cat);if(c0&&c0.type===(F.type==='card'?'expense':F.type))F.cat=x.cat;const a0=acc(x.acc);if(a0&&!a0.closed&&F.type!=='card')F.acc=x.acc;if(!(calc(F.amount)>0))F.amount=String(x.amount);drawEntry();break}
     case 'payday':openPayday();break;
     case 'cardopen':openCard();break;
+    case 'review':openReview(id);break;
     case 'cardpaid':openCardPaid(id);break;
     case 'cardback':drawCardFresh();break;
     case 'cardnav':V.cardC=+el.dataset.d<0?stmtPrev(V.cardC):stmtNext(V.cardC);sameSheet=false;drawCardFresh();break;
