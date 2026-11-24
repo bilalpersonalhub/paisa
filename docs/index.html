@@ -943,7 +943,7 @@ function renderSettings(){
   h+=`<div class="card"><h2>Your data</h2><div class="sub">Everything is stored only on this device. ${lb?'Last backup: '+nice(lb)+' '+pd(lb).getFullYear()+'.':'<b class="bad">No backup saved yet.</b>'}</div>${has('pickBackupFolder')?`<div class="autobk"><b>Automatic backup</b><div class="sub">${ai.folder?'Saves into “'+esc(ai.folder)+'” whenever you leave the app after a change. '+(ai.ok==='0'?'<b class="bad">The last attempt failed. Choose the folder again.</b>':ai.at?'Last saved '+shortDate(ai.at)+'.':'Not saved yet.')+' The ten newest files are kept.':'Choose a folder and Paisa saves a backup there by itself whenever you leave the app after a change. Pick one that syncs to the cloud, or that you copy off the phone.'}</div><button class="btn ${ai.folder?'ghost':''}" data-act="bkfolder">${ai.folder?'Change folder':'Choose backup folder'}</button>${ai.folder?'<button class="btn ghost" data-act="bkoff">Turn off automatic backup</button>':''}</div>`:''}<button class="btn ${has('pickBackupFolder')&&ai.folder?'ghost':''}" data-act="backup">Save a backup now</button><button class="btn ghost" data-act="restore">Restore a backup</button><button class="btn ghost" data-act="snaps">Restore points</button><button class="btn ghost" data-act="xlsx">Export to Excel</button><button class="btn ghost" data-act="import">Import from Hysab Kytab</button><button class="btn danger" data-act="wipe">Wipe all data</button></div>`;
   h+=`<div class="sub" style="text-align:center;margin:14px">Paisa ${APPV} · ${S.entries.length} entries</div>`;
   return h}
-const APPV='1.11';
+const APPV='1.12';
 
 /* ---------- render ---------- */
 function render(kind){
@@ -989,6 +989,11 @@ function setDefaults(){const m=S.mem;const open=S.accounts.filter(a=>!a.closed);
     if(F.type==='income'&&!F.cat){const s=S.categories.find(x=>x.type==='income'&&/^salary$/i.test(x.name));if(s)F.cat=s.id}}
   F.payout=false;F.startsMonth=F.type==='income'&&F.cat&&/^salary$/i.test(catName(F.cat));
   if(F.type==='card'){const c=cat(m.cardCat);F.cat=c&&!c.hidden?c.id:null;F.acc=null;F.startsMonth=false}}
+function potLeft(ex){let inn=0,out=0;for(const e of S.entries){if(e.type==='income'&&!isSalary(e))inn+=e.amount;else if(e.type==='expense'&&e.payout&&e.id!==ex)out+=e.amount}return inn-out}
+function payoutNoteText(){const left=potLeft(F.edit?F.id:null);const amt=calc(F.amount);
+  if(left<=0)return `<b class="bad">Nothing is left in the payout${left<0?' (already '+fmt(-left)+' over)':''}.</b> If you save, this counts against your salary instead.`;
+  if(amt>left)return `<b class="bad">Only ${fmt(left)} is left in the payout.</b> If you save, ${fmt(left)} is marked from payout and the other ${fmt(amt-left)} counts against your salary.`;
+  return `Payout left: <b>${fmt(left)}</b>${amt>0?', and '+fmt(left-amt)+' after this':''}. Not counted against salary.`}
 function drawEntry(){sameSheet=!!$('#sheet .sheetwrap:not(.out)')&&!!$('#amt');
   const open=S.accounts.filter(a=>!a.closed||a.id===F.acc||a.id===F.toAcc);
   const isCard=F.type==='card';const u=isCard?cardUsage():usage(F.type);const cats=S.categories.filter(c=>c.type===(isCard?'expense':F.type)&&(!c.hidden||c.id===F.cat)).map((c,i)=>({c,i})).sort((a,b)=>(u[b.c.id]||0)-(u[a.c.id]||0)||a.i-b.i).map(x=>x.c);
@@ -1009,7 +1014,7 @@ function drawEntry(){sameSheet=!!$('#sheet .sheetwrap:not(.out)')&&!!$('#amt');
   // options as small toggles; each explains itself only while it is on
   const sp=F.splits||[];const fuel=vehKind(cat(F.cat))==='fuel'&&F.veh;let opts='',notes='';
   if(F.type==='expense'){opts+=opt('payout','From payout',F.payout,'payout')+opt('refund','Refund',F.refund)+(fuel?opt('partial','Part fill',F.partial):'')+(F.edit?'':`<button class="opt ${sp.length?'on':''}" data-act="spadd">Split</button>`);
-    if(F.payout)notes+='<div class="optnote">Paid from committee payout or other extra money. Not counted against salary.</div>';if(F.refund)notes+='<div class="optnote">Money coming back for an earlier expense. It lowers this category’s spending.</div>'}
+    if(F.payout)notes+=`<div class="optnote" id="payNote">${F.refund?'Paid from committee payout or other extra money. Not counted against salary.':payoutNoteText()}</div>`;if(F.refund)notes+='<div class="optnote">Money coming back for an earlier expense. It lowers this category’s spending.</div>'}
   if(isCard){opts+=opt('refund','Refund',F.refund)+(fuel?opt('partial','Part fill',F.partial):'');if(F.refund)notes+='<div class="optnote">Money coming back onto the card. It lowers the statement total.</div>'}
   if(fuel&&F.partial)notes+='<div class="optnote">The tank was not filled to the top. Fuel economy waits for the next full tank.</div>';
   if(F.type==='income'){const l=labelFor(F.date||today());opts+=opt('startsMonth','Starts new month',F.startsMonth)+(F.edit?'':'<button class="opt" data-act="payday">Payday routine</button>');notes+=`<div class="optnote">${F.startsMonth?'This is the salary for <b>'+esc(l.label)+'</b>. That month begins on this date.':'Turn on “Starts new month” for salary. Leave it off for payouts and other income.'}</div>`}
@@ -1036,11 +1041,18 @@ function saveEntry(){
   if(sign<0)e.refund=true;
   if(F.type==='income'&&F.startsMonth)e.startsMonth=true;
   if(F.type==='expense'){const ve=vehApply(e);if(ve)return toast(ve)}
-  if(F.edit){const i=S.entries.findIndex(x=>x.id===e.id);S.entries[i]=e}else{S.entries.push(e);parts.forEach((x,k)=>S.entries.push({...e,id:uid(),cat:x.cat,amount:sign*x.amount,ts:e.ts+1+k}))}
+  let made=[e,...(F.edit?[]:parts.map((x,k)=>({...e,id:uid(),cat:x.cat,amount:sign*x.amount,ts:e.ts+1+k})))];let payMsg='';
+  if(e.payout&&sign>0){let left=Math.max(0,potLeft(F.edit?e.id:null));const out=[];let fromPay=0,fromSal=0;
+    for(const x of made){const cov=Math.min(left,x.amount);left-=cov;
+      if(cov>=x.amount){out.push(x);fromPay+=x.amount}
+      else if(cov<=0){const y={...x};delete y.payout;out.push(y);fromSal+=x.amount}
+      else{out.push({...x,amount:cov});const r={...x,id:uid(),amount:x.amount-cov,ts:(x.ts||Date.now())+0.5};delete r.payout;delete r.odo;delete r.litres;delete r.full;out.push(r);fromPay+=cov;fromSal+=x.amount-cov}}
+    made=out;if(fromSal)payMsg=fromPay?fmt(fromPay)+' from payout, '+fmt(fromSal)+' counted against salary':'Payout is used up, so this counts against salary'}
+  if(F.edit){const i=S.entries.findIndex(x=>x.id===e.id);S.entries.splice(i,1,...made)}else S.entries.push(...made);
   const m=S.mem;if(e.type==='transfer'){m.trFrom=e.acc;m.trTo=e.toAcc}else if(e.type==='expense'){m.expAcc=e.acc;m.expCat=e.cat}else{m.incAcc=e.acc;m.incCat=e.cat}
   S.settings.started=true;save();closeSheet();
   const cs=cycles();const c=cs.find(x=>inCyc(x,e.date));if(c)V.key=c.key;
-  render();toast(parts.length?'Saved as '+(parts.length+1)+' entries':'Saved')}
+  render();toast(payMsg||(parts.length?'Saved as '+(parts.length+1)+' entries':'Saved'))}
 
 /* account / category sheets */
 function openAcct(id){const a=id?acc(id):null;const used=a&&S.entries.some(e=>e.acc===id||e.toAcc===id);
@@ -1233,7 +1245,7 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('input',ev=>{const t=ev.target;
   if(t.id==='q'){V.q=t.value;render()}
-  else if(t.id==='amt'){F.amount=t.value;showCalc();const vh=$('#vehHint');if(vh)vh.textContent=vehHintText()}
+  else if(t.id==='amt'){F.amount=t.value;showCalc();const pn=$('#payNote');if(pn&&F&&F.payout&&!F.refund)pn.innerHTML=payoutNoteText();const vh=$('#vehHint');if(vh)vh.textContent=vehHintText()}
   else if((t.id==='odo'||t.id==='lit')&&F){syncF();const vh=$('#vehHint');if(vh)vh.textContent=vehHintText()}
   else if(t.id==='note'&&F){F.note=t.value;noteSuggest(t.value)}
   else if(t.classList.contains('bc'))bcGap(t.dataset.id,t.value);
